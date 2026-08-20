@@ -17,6 +17,7 @@ export type MeetingListFilters = {
   organizerId?: string;
   participantId?: string;
   projectId?: string;
+  customerId?: string;
   from?: Date;
   to?: Date;
   startFrom?: Date;
@@ -37,6 +38,7 @@ const MEETING_UPDATE_FIELDS = [
   "meetingType",
   "participants",
   "projectId",
+  "customerId",
   "location",
   "startTime",
   "endTime",
@@ -66,6 +68,7 @@ function stringifyIds(record: Record<string, unknown>) {
   if (record.organizerId) record.organizerId = String(record.organizerId);
   if (record.createdBy) record.createdBy = String(record.createdBy);
   if (record.projectId) record.projectId = String(record.projectId);
+  if (record.customerId) record.customerId = String(record.customerId);
   if (record.deletedBy) record.deletedBy = String(record.deletedBy);
   if (Array.isArray(record.participants)) {
     record.participants = record.participants.map((item) => String(item));
@@ -102,6 +105,7 @@ function buildFilter(filters: MeetingListFilters): FilterQuery<MeetingDocument> 
   if (filters.organizerId) query.organizerId = filters.organizerId;
   if (filters.participantId) query.participants = filters.participantId;
   if (filters.projectId) query.projectId = filters.projectId;
+  if (filters.customerId) query.customerId = filters.customerId;
   if (filters.excludeCancelled && !filters.status) query.status = { $ne: "CANCELLED" };
 
   if (filters.from || filters.to) {

@@ -23,7 +23,7 @@ export const TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
 export const TASK_SAFE_FIELDS =
-  "taskId title description assignedTo createdBy projectId priority status dueDate reminderAt startedAt completedAt cancelledAt completionNote cancellationReason isDeleted deletedAt deletedBy createdAt updatedAt";
+  "taskId title description assignedTo createdBy projectId customerId meetingId priority status dueDate reminderAt startedAt completedAt cancelledAt completionNote cancellationReason isDeleted deletedAt deletedBy createdAt updatedAt";
 
 export const OPEN_TASK_STATUSES: TaskStatus[] = ["PENDING", "IN_PROGRESS"];
 
@@ -44,7 +44,7 @@ export const PROJECT_HEALTH = ["HEALTHY", "ATTENTION", "CRITICAL"] as const;
 export type ProjectHealth = (typeof PROJECT_HEALTH)[number];
 
 export const PROJECT_SAFE_FIELDS =
-  "projectId name code description location projectType managerId members status progress budget actualExpense startDate expectedEndDate completedAt createdBy isDeleted deletedAt deletedBy createdAt updatedAt";
+  "projectId name code description location projectType managerId members customerId status progress budget actualExpense startDate expectedEndDate completedAt createdBy isDeleted deletedAt deletedBy createdAt updatedAt";
 
 export const MAX_PROJECT_MEMBERS = 50;
 
@@ -64,7 +64,7 @@ export const MEETING_STATUSES = ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCE
 export type MeetingStatus = (typeof MEETING_STATUSES)[number];
 
 export const MEETING_SAFE_FIELDS =
-  "meetingId title description meetingType organizerId participants projectId location startTime endTime timezone status notes cancellationReason cancelledAt completedAt createdBy isDeleted deletedAt deletedBy createdAt updatedAt";
+  "meetingId title description meetingType organizerId participants projectId customerId location startTime endTime timezone status notes cancellationReason cancelledAt completedAt createdBy isDeleted deletedAt deletedBy createdAt updatedAt";
 
 export const MAX_MEETING_PARTICIPANTS = 50;
 export const MAX_CALENDAR_RANGE_DAYS = 93;

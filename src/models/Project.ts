@@ -20,6 +20,7 @@ export type ProjectDocument = mongoose.Document & {
   projectType: ProjectType;
   managerId: mongoose.Types.ObjectId;
   members: mongoose.Types.ObjectId[];
+  customerId: mongoose.Types.ObjectId | null;
   status: ProjectStatus;
   progress: number;
   budget: number;
@@ -58,6 +59,7 @@ const projectSchema = new Schema<ProjectDocument>(
     projectType: { type: String, enum: PROJECT_TYPES, required: true, default: "OTHER" },
     managerId: { type: Schema.Types.ObjectId, ref: "Employee", required: true },
     members: { type: [{ type: Schema.Types.ObjectId, ref: "Employee" }], default: [] },
+    customerId: { type: Schema.Types.ObjectId, ref: "Customer", default: null },
     status: { type: String, enum: PROJECT_STATUSES, required: true, default: "PLANNING" },
     progress: { type: Number, required: true, default: 0, min: 0, max: 100 },
     budget: moneyInt,
@@ -95,5 +97,6 @@ projectSchema.index({ isDeleted: 1, managerId: 1, status: 1 });
 projectSchema.index({ isDeleted: 1, projectType: 1, status: 1 });
 projectSchema.index({ isDeleted: 1, location: 1 });
 projectSchema.index({ isDeleted: 1, createdBy: 1 });
+projectSchema.index({ isDeleted: 1, customerId: 1 });
 
 export const Project = mongoose.model<ProjectDocument>("Project", projectSchema);

@@ -1,6 +1,8 @@
 import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { employeeRepository } from "../repositories/employee.repository";
+import { customerRepository } from "../repositories/customer.repository";
+import { meetingRepository } from "../repositories/meeting.repository";
 import { projectRepository } from "../repositories/project.repository";
 import { taskRepository, type TaskSortField } from "../repositories/task.repository";
 import { userRepository } from "../repositories/user.repository";
@@ -38,6 +40,8 @@ type CreateTaskInput = {
   description?: string;
   assignedTo: string;
   projectId?: string | null;
+  customerId?: string | null;
+  meetingId?: string | null;
   priority: TaskPriority;
   dueDate?: Date;
   reminderAt?: Date;
@@ -48,6 +52,8 @@ type UpdateTaskInput = {
   description?: string;
   assignedTo?: string;
   projectId?: string | null;
+  customerId?: string | null;
+  meetingId?: string | null;
   priority?: TaskPriority;
   dueDate?: Date;
   reminderAt?: Date;
@@ -100,6 +106,8 @@ function parseTaskQuery(query: Record<string, unknown>) {
     assignedTo: typeof query.assignedTo === "string" ? query.assignedTo : undefined,
     createdBy: typeof query.createdBy === "string" ? query.createdBy : undefined,
     projectId: typeof query.projectId === "string" ? query.projectId : undefined,
+    customerId: typeof query.customerId === "string" ? query.customerId : undefined,
+    meetingId: typeof query.meetingId === "string" ? query.meetingId : undefined,
     dueFrom: query.dueFrom instanceof Date ? query.dueFrom : undefined,
     dueTo: query.dueTo instanceof Date ? query.dueTo : undefined,
     overdue: query.overdue === true,
@@ -180,25 +188,61 @@ async function assertProjectLink(projectId: string | null | undefined, actor: Ac
   );
 }
 
+async function assertOptionalCustomer(customerId: string | null | undefined) {
+  if (!customerId) return;
+  assertObjectId(customerId, "customerId");
+  const customer = await customerRepository.findById(customerId);
+  if (!customer || customer.isDeleted) {
+    throw new BadRequestError("Customer not found", [{ field: "customerId", message: "Customer must exist" }]);
+  }
+}
+
+async function assertOptionalMeeting(meetingId: string | null | undefined) {
+  if (!meetingId) return;
+  assertObjectId(meetingId, "meetingId");
+  const meeting = await meetingRepository.findById(meetingId);
+  if (!meeting || meeting.isDeleted) {
+    throw new BadRequestError("Meeting not found", [{ field: "meetingId", message: "Meeting must exist" }]);
+  }
+}
+
+async function inheritedCustomerId(projectId: string | null | undefined) {
+  if (!projectId) return null;
+  const project = await projectRepository.findById(projectId);
+  return project?.customerId ? String(project.customerId) : null;
+}
+
 export async function hydrateTaskRecords(tasks: Record<string, unknown>[], detailed = false) {
   const assigneeIds = [...new Set(tasks.map((task) => String(task.assignedTo)).filter(Boolean))];
   const creatorIds = [...new Set(tasks.map((task) => String(task.createdBy)).filter(Boolean))];
+  const projectIds = [...new Set(tasks.map((task) => String(task.projectId ?? "")).filter(Boolean))];
+  const customerIds = [...new Set(tasks.map((task) => String(task.customerId ?? "")).filter(Boolean))];
 
-  const [employees, users] = await Promise.all([
+  const [employees, users, projects, customers] = await Promise.all([
     employeeRepository.findSummariesByIds(assigneeIds),
     detailed ? userRepository.findSummariesByIds(creatorIds) : Promise.resolve([]),
+    projectRepository.findSummariesByIds(projectIds),
+    customerRepository.findSummariesByIds(customerIds),
   ]);
 
   const employeesById = new Map(employees.map((item) => [String(item._id), item]));
   const usersById = new Map(users.map((item) => [String(item._id), item]));
+  const projectsById = new Map(projects.map((item) => [String(item._id), item]));
+  const customersById = new Map(customers.map((item) => [String(item._id), item]));
 
   return tasks.map((task) => {
     const assigned = employeesById.get(String(task.assignedTo));
     const created = usersById.get(String(task.createdBy));
+    const project = task.projectId ? projectsById.get(String(task.projectId)) : null;
+    const customer = task.customerId ? customersById.get(String(task.customerId)) : null;
     return {
       ...task,
       assignedTo: assigneeSummary(assigned ?? null) ?? task.assignedTo,
       createdBy: detailed ? (creatorSummary(created ?? null) ?? task.createdBy) : task.createdBy,
+      project: project ? { id: String(project._id), name: project.name, projectId: project.projectId } : null,
+      customer: customer
+        ? { id: String(customer._id), name: customer.name, customerId: customer.customerId }
+        : null,
     };
   });
 }
@@ -341,6 +385,9 @@ export const taskService = {
     const { teamIds } = await resolveScope(actor);
     await assertAssignableEmployee(actor, input.assignedTo, teamIds);
     await assertProjectLink(input.projectId, actor);
+    await assertOptionalMeeting(input.meetingId);
+    const customerId = input.customerId ?? (await inheritedCustomerId(input.projectId ?? null));
+    await assertOptionalCustomer(customerId);
 
     if (input.reminderAt && input.dueDate && input.reminderAt.getTime() > input.dueDate.getTime()) {
       throw new BadRequestError("reminderAt must be on or before dueDate");
@@ -356,6 +403,8 @@ export const taskService = {
           assignedTo: input.assignedTo,
           createdBy: actor.id,
           projectId: input.projectId ?? null,
+          customerId,
+          meetingId: input.meetingId ?? null,
           priority: input.priority,
           status: "PENDING",
           dueDate: input.dueDate ?? null,
@@ -414,6 +463,12 @@ export const taskService = {
 
     if (input.projectId !== undefined) {
       await assertProjectLink(input.projectId, actor);
+    }
+    if (input.customerId !== undefined) {
+      await assertOptionalCustomer(input.customerId);
+    }
+    if (input.meetingId !== undefined) {
+      await assertOptionalMeeting(input.meetingId);
     }
 
     const dueDate = input.dueDate === undefined ? task.dueDate : input.dueDate;

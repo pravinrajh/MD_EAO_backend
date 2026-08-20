@@ -14,6 +14,7 @@ export type MeetingDocument = mongoose.Document & {
   organizerId: mongoose.Types.ObjectId;
   participants: mongoose.Types.ObjectId[];
   projectId: mongoose.Types.ObjectId | null;
+  customerId: mongoose.Types.ObjectId | null;
   location: string;
   startTime: Date;
   endTime: Date;
@@ -40,6 +41,7 @@ const meetingSchema = new Schema<MeetingDocument>(
     organizerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     participants: { type: [{ type: Schema.Types.ObjectId, ref: "Employee" }], default: [] },
     projectId: { type: Schema.Types.ObjectId, ref: "Project", default: null },
+    customerId: { type: Schema.Types.ObjectId, ref: "Customer", default: null },
     location: { type: String, default: "", trim: true, maxlength: 200 },
     startTime: { type: Date, required: true },
     endTime: { type: Date, required: true },
@@ -76,6 +78,7 @@ meetingSchema.index({ isDeleted: 1, startTime: 1 });
 meetingSchema.index({ isDeleted: 1, organizerId: 1, startTime: 1 });
 // Project meeting lists: GET /projects/:id/meetings.
 meetingSchema.index({ isDeleted: 1, projectId: 1, startTime: 1 });
+meetingSchema.index({ isDeleted: 1, customerId: 1, startTime: 1 });
 // Status filters combined with date sort.
 meetingSchema.index({ isDeleted: 1, status: 1, startTime: 1 });
 // Fallback recency sort.

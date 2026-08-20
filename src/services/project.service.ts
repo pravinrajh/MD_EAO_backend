@@ -1,5 +1,6 @@
 import { logger } from "../config/logger";
 import { employeeRepository } from "../repositories/employee.repository";
+import { customerRepository } from "../repositories/customer.repository";
 import { projectRepository, type ProjectSortField } from "../repositories/project.repository";
 import { taskRepository } from "../repositories/task.repository";
 import { hydrateTaskRecords } from "./task.service";
@@ -44,6 +45,7 @@ type CreateProjectInput = {
   projectType: ProjectType;
   managerId: string;
   members?: string[];
+  customerId?: string | null;
   status?: ProjectStatus;
   progress?: number;
   budget?: number;
@@ -144,6 +146,18 @@ async function assertActiveEmployees(ids: string[], field: string) {
   return unique;
 }
 
+async function assertOptionalCustomer(customerId: string | null | undefined) {
+  if (!customerId) return;
+  assertObjectId(customerId, "customerId");
+  const customer = await customerRepository.findById(customerId);
+  if (!customer || customer.isDeleted) {
+    throw new BadRequestError("Customer not found", [{ field: "customerId", message: "Customer must exist" }]);
+  }
+  if (customer.status === "BLOCKED") {
+    throw new BadRequestError("Customer is blocked", [{ field: "customerId", message: "Customer must not be BLOCKED" }]);
+  }
+}
+
 async function assertUniqueCode(code: string | undefined, excludeId?: string) {
   if (!code) return;
   const existing = await projectRepository.findByCode(code);
@@ -170,11 +184,17 @@ async function hydrate(projects: Record<string, unknown>[], withMembers = false)
   const memberIds = withMembers
     ? [...new Set(projects.flatMap((project) => (Array.isArray(project.members) ? project.members.map(String) : [])))]
     : [];
-  const employees = await employeeRepository.findSummariesByIds([...new Set([...managerIds, ...memberIds])]);
+  const customerIds = [...new Set(projects.map((project) => String(project.customerId ?? "")).filter(Boolean))];
+  const [employees, customers] = await Promise.all([
+    employeeRepository.findSummariesByIds([...new Set([...managerIds, ...memberIds])]),
+    customerRepository.findSummariesByIds(customerIds),
+  ]);
   const byId = new Map(employees.map((item) => [String(item._id), item]));
+  const customersById = new Map(customers.map((item) => [String(item._id), item]));
 
   return projects.map((project) => {
     const manager = employeeSummary(byId.get(String(project.managerId)) ?? null);
+    const customer = project.customerId ? customersById.get(String(project.customerId)) : null;
     const members = withMembers
       ? (Array.isArray(project.members) ? project.members : [])
           .map((id) => employeeSummary(byId.get(String(id)) ?? null))
@@ -183,6 +203,9 @@ async function hydrate(projects: Record<string, unknown>[], withMembers = false)
     return {
       ...project,
       manager,
+      customer: customer
+        ? { id: String(customer._id), name: customer.name, customerId: customer.customerId }
+        : null,
       ...(withMembers ? { members } : {}),
     };
   });
@@ -198,6 +221,7 @@ export const projectService = {
       status: query.status as ProjectStatus | undefined,
       projectType: query.projectType as ProjectType | undefined,
       managerId: typeof query.managerId === "string" ? query.managerId : undefined,
+      customerId: typeof query.customerId === "string" ? query.customerId : undefined,
       location: typeof query.location === "string" ? query.location : undefined,
       scope: visibilityScope(employeeId, isPrivileged(actor.role)),
       skip,
@@ -224,6 +248,7 @@ export const projectService = {
     assertCanCreate(actor);
     await assertActiveEmployee(input.managerId, "managerId");
     const members = await assertActiveEmployees(input.members ?? [], "members");
+    await assertOptionalCustomer(input.customerId);
     const code = input.code?.trim() ? input.code.trim().toUpperCase() : "";
     await assertUniqueCode(code || undefined);
 
@@ -242,6 +267,7 @@ export const projectService = {
           projectType: input.projectType,
           managerId: input.managerId,
           members,
+          customerId: input.customerId ?? null,
           status,
           progress,
           budget: input.budget ?? 0,
@@ -285,6 +311,9 @@ export const projectService = {
     }
     if (input.members) {
       input.members = await assertActiveEmployees(input.members, "members");
+    }
+    if (input.customerId !== undefined) {
+      await assertOptionalCustomer(input.customerId);
     }
     if (input.code !== undefined) {
       await assertUniqueCode(input.code || undefined, id);

@@ -3,6 +3,7 @@ import { MAX_PROJECT_MEMBERS, PROJECT_STATUSES, PROJECT_TYPES } from "../utils/c
 import {
   objectIdSchema,
   optionalIsoDateSchema,
+  optionalObjectIdSchema,
   rejectMongoOperators,
 } from "./common.validation";
 
@@ -50,6 +51,7 @@ export const createProjectSchema = z
     projectType: z.enum(PROJECT_TYPES),
     managerId: objectIdSchema,
     members: membersSchema,
+    customerId: optionalObjectIdSchema,
     status: z.enum(PROJECT_STATUSES).optional(),
     progress: progressSchema.optional(),
     budget: moneySchema.optional(),
@@ -78,6 +80,7 @@ export const updateProjectSchema = z
     projectType: z.enum(PROJECT_TYPES).optional(),
     managerId: objectIdSchema.optional(),
     members: membersSchema,
+    customerId: optionalObjectIdSchema,
     status: z.enum(PROJECT_STATUSES).optional(),
     progress: progressSchema.optional(),
     budget: moneySchema.optional(),
@@ -119,6 +122,7 @@ export const listProjectsQuerySchema = z.object({
   status: z.enum(PROJECT_STATUSES).optional(),
   projectType: z.enum(PROJECT_TYPES).optional(),
   managerId: objectIdSchema.optional(),
+  customerId: objectIdSchema.optional(),
   location: z.string().trim().max(160).optional(),
   sortBy: z.enum(["createdAt", "name", "status", "progress", "startDate", "expectedEndDate"]).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),

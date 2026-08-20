@@ -1,6 +1,7 @@
 import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { employeeRepository } from "../repositories/employee.repository";
+import { customerRepository } from "../repositories/customer.repository";
 import { meetingRepository, type MeetingSortField } from "../repositories/meeting.repository";
 import { projectRepository } from "../repositories/project.repository";
 import { userRepository } from "../repositories/user.repository";
@@ -37,6 +38,7 @@ type CreateMeetingInput = {
   meetingType: MeetingType;
   participants?: string[];
   projectId?: string | null;
+  customerId?: string | null;
   location?: string;
   startTime: Date;
   endTime: Date;
@@ -80,6 +82,7 @@ function asMeeting(record: Record<string, unknown>) {
     organizerId: String(record.organizerId),
     participants: Array.isArray(record.participants) ? record.participants.map((item) => String(item)) : [],
     projectId: record.projectId ? String(record.projectId) : null,
+    customerId: record.customerId ? String(record.customerId) : null,
     status: record.status as MeetingStatus,
   };
 }
@@ -163,6 +166,21 @@ async function assertUsableProject(projectId: string | null | undefined, actor: 
   return project;
 }
 
+async function assertOptionalCustomer(customerId: string | null | undefined) {
+  if (!customerId) return;
+  assertObjectId(customerId, "customerId");
+  const customer = await customerRepository.findById(customerId);
+  if (!customer || customer.isDeleted) {
+    throw new BadRequestError("Customer not found", [{ field: "customerId", message: "Customer must exist" }]);
+  }
+}
+
+async function inheritedCustomerId(projectId: string | null | undefined) {
+  if (!projectId) return null;
+  const project = await projectRepository.findById(projectId);
+  return project?.customerId ? String(project.customerId) : null;
+}
+
 async function assertNoConflicts(participantIds: string[], startTime: Date, endTime: Date, excludeId?: string) {
   const overlapping = await meetingRepository.findConflicts({
     participantIds,
@@ -241,19 +259,23 @@ async function hydrate(meetings: Record<string, unknown>[]) {
     ...new Set(meetings.flatMap((item) => (Array.isArray(item.participants) ? item.participants.map(String) : []))),
   ];
   const projectIds = [...new Set(meetings.map((item) => (item.projectId ? String(item.projectId) : "")).filter(Boolean))];
+  const customerIds = [...new Set(meetings.map((item) => (item.customerId ? String(item.customerId) : "")).filter(Boolean))];
 
-  const [users, employees, projects] = await Promise.all([
+  const [users, employees, projects, customers] = await Promise.all([
     userRepository.findSummariesByIds(organizerIds),
     employeeRepository.findSummariesByIds(participantIds),
     projectRepository.findSummariesByIds(projectIds),
+    customerRepository.findSummariesByIds(customerIds),
   ]);
 
   const usersById = new Map(users.map((item) => [String(item._id), item]));
   const employeesById = new Map(employees.map((item) => [String(item._id), item]));
   const projectsById = new Map(projects.map((item) => [String(item._id), item]));
+  const customersById = new Map(customers.map((item) => [String(item._id), item]));
 
   return meetings.map((meeting) => {
     const project = meeting.projectId ? projectsById.get(String(meeting.projectId)) : null;
+    const customer = meeting.customerId ? customersById.get(String(meeting.customerId)) : null;
     return {
       ...meeting,
       organizer: organizerSummary(usersById.get(String(meeting.organizerId)) ?? null),
@@ -261,6 +283,9 @@ async function hydrate(meetings: Record<string, unknown>[]) {
         .map((id) => participantSummary(employeesById.get(String(id)) ?? null))
         .filter(Boolean),
       project: project ? { id: String(project._id), name: project.name, projectId: project.projectId } : null,
+      customer: customer
+        ? { id: String(customer._id), name: customer.name, customerId: customer.customerId }
+        : null,
     };
   });
 }
@@ -273,6 +298,7 @@ function parseListQuery(query: Record<string, unknown>) {
     organizerId: typeof query.organizerId === "string" ? query.organizerId : undefined,
     participantId: typeof query.participantId === "string" ? query.participantId : undefined,
     projectId: typeof query.projectId === "string" ? query.projectId : undefined,
+    customerId: typeof query.customerId === "string" ? query.customerId : undefined,
     from: query.from instanceof Date ? query.from : undefined,
     to: query.to instanceof Date ? query.to : undefined,
     sortBy: (query.sortBy as MeetingSortField | undefined) ?? "startTime",
@@ -316,6 +342,8 @@ export const meetingService = {
     const { employeeId } = await actorContext(actor);
     const participants = await assertActiveParticipants(input.participants ?? []);
     await assertUsableProject(input.projectId, actor, employeeId);
+    const customerId = input.customerId ?? (await inheritedCustomerId(input.projectId ?? null));
+    await assertOptionalCustomer(customerId);
     await assertNoConflicts(participants, input.startTime, input.endTime);
 
     let created = null;
@@ -330,6 +358,7 @@ export const meetingService = {
           createdBy: actor.id,
           participants,
           projectId: input.projectId ?? null,
+          customerId,
           location: input.location ?? "",
           startTime: input.startTime,
           endTime: input.endTime,
@@ -387,6 +416,9 @@ export const meetingService = {
       input.participants !== undefined ? await assertActiveParticipants(input.participants) : current.participants;
     if (input.projectId !== undefined) {
       await assertUsableProject(input.projectId, actor, employeeId);
+    }
+    if (input.customerId !== undefined) {
+      await assertOptionalCustomer(input.customerId);
     }
     if (input.startTime || input.endTime || input.participants) {
       await assertNoConflicts(participants, new Date(startTime), new Date(endTime), id);

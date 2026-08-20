@@ -17,6 +17,8 @@ export type TaskListFilters = {
   assignedTo?: string;
   createdBy?: string;
   projectId?: string;
+  customerId?: string;
+  meetingId?: string;
   dueFrom?: Date;
   dueTo?: Date;
   dueStart?: Date;
@@ -35,6 +37,8 @@ const TASK_UPDATE_FIELDS = [
   "description",
   "assignedTo",
   "projectId",
+  "customerId",
+  "meetingId",
   "priority",
   "dueDate",
   "reminderAt",
@@ -73,6 +77,8 @@ function stringifyIds(record: Record<string, unknown>) {
   if (record.assignedTo) record.assignedTo = String(record.assignedTo);
   if (record.createdBy) record.createdBy = String(record.createdBy);
   if (record.projectId) record.projectId = String(record.projectId);
+  if (record.customerId) record.customerId = String(record.customerId);
+  if (record.meetingId) record.meetingId = String(record.meetingId);
   if (record.deletedBy) record.deletedBy = String(record.deletedBy);
   delete record._id;
   delete record.__v;
@@ -117,6 +123,8 @@ function buildFilter(filters: TaskListFilters, now: Date): FilterQuery<TaskDocum
   if (filters.assignedTo) query.assignedTo = filters.assignedTo;
   if (filters.createdBy) query.createdBy = filters.createdBy;
   if (filters.projectId) query.projectId = filters.projectId;
+  if (filters.customerId) query.customerId = filters.customerId;
+  if (filters.meetingId) query.meetingId = filters.meetingId;
 
   const dueDate: Record<string, Date> = {};
   if (filters.dueStart) dueDate.$gte = filters.dueStart;

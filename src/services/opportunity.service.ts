@@ -105,6 +105,13 @@ async function assertUsableProject(projectId: string | null | undefined, actor: 
   return project;
 }
 
+async function linkProjectCustomerIfEmpty(projectId: string | null | undefined, customerId: string) {
+  if (!projectId) return;
+  const project = await projectRepository.findById(projectId);
+  if (!project || project.isDeleted || project.customerId) return;
+  await projectRepository.updateById(projectId, { customerId });
+}
+
 async function loadOpportunity(id: string) {
   assertObjectId(id);
   const opportunity = await opportunityRepository.findById(id);
@@ -209,6 +216,7 @@ export const opportunityService = {
       }
     }
     if (!created) throw new ConflictError("Unable to generate a unique opportunity ID");
+    await linkProjectCustomerIfEmpty(input.projectId ?? null, input.customerId);
     logger.info({ opportunityId: created.opportunityId, createdBy: actor.id }, "Opportunity created");
     const result = await this.getById(String(created._id), actor);
     if (created.nextFollowUpAt) {
@@ -240,6 +248,10 @@ export const opportunityService = {
 
     const updated = await opportunityRepository.updateById(id, input);
     if (!updated) throw new NotFoundError("Opportunity not found");
+    const customerId = String(input.customerId ?? updated.customerId ?? "");
+    const projectId =
+      input.projectId === undefined ? (updated.projectId ? String(updated.projectId) : null) : input.projectId;
+    if (customerId) await linkProjectCustomerIfEmpty(projectId, customerId);
     const result = await this.getById(id, actor);
     if (input.nextFollowUpAt) {
       await hookCrmFollowUp(

@@ -338,5 +338,36 @@
       "followUpOffsetDays": 10,
       "description": "Optional add-on after Block B close."
     }
+  ],
+  "meetings": [
+    {
+      "meetingId": "MTG-SEED-001",
+      "title": "OMR site review with Harbor Homes",
+      "description": "Walk Block B interiors with Lakshmi Rao and agree next snag items.",
+      "meetingType": "CLIENT",
+      "organizer": "manager",
+      "participants": ["anand", "raj"],
+      "project": "CHN-RES",
+      "customer": "CUST-SEED-001",
+      "location": "OMR site office",
+      "startOffsetHours": 4,
+      "durationHours": 1,
+      "status": "SCHEDULED",
+      "linkedTask": "TASK-SEED-002"
+    },
+    {
+      "meetingId": "MTG-SEED-002",
+      "title": "Bengaluru tech park risk catch-up",
+      "description": "Delay reasons, facade samples, and catch-up plan for MD.",
+      "meetingType": "PROJECT_REVIEW",
+      "organizer": "admin",
+      "participants": ["anand", "meena"],
+      "project": "BLR-COM",
+      "customer": "CUST-SEED-002",
+      "location": "Manyata site cabin",
+      "startOffsetHours": 26,
+      "durationHours": 1,
+      "status": "SCHEDULED"
+    }
   ]
 }

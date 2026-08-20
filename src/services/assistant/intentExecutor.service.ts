@@ -64,10 +64,11 @@ function mapHealth(health: unknown): "HEALTHY" | "AT_RISK" | "CRITICAL" {
 
 async function pendingTasks(actor: AssistantActor, entities: ResolvedEntities): Promise<ExecutorPayload> {
   const assignedTo = entities.employeeId;
+  const projectId = entities.projectId;
   const [pending, high, critical] = await Promise.all([
-    taskService.list({ ...LIST, status: "PENDING", assignedTo, sortBy: "dueDate", sortOrder: "asc" }, actor),
-    taskService.list({ ...LIST, status: "PENDING", assignedTo, priority: "HIGH", limit: 1 }, actor),
-    taskService.list({ ...LIST, status: "PENDING", assignedTo, priority: "CRITICAL", limit: 1 }, actor),
+    taskService.list({ ...LIST, status: "PENDING", assignedTo, projectId, sortBy: "dueDate", sortOrder: "asc" }, actor),
+    taskService.list({ ...LIST, status: "PENDING", assignedTo, projectId, priority: "HIGH", limit: 1 }, actor),
+    taskService.list({ ...LIST, status: "PENDING", assignedTo, projectId, priority: "CRITICAL", limit: 1 }, actor),
   ]);
   const highPriority = high.meta.total + critical.meta.total;
   return {
@@ -84,10 +85,11 @@ async function pendingTasks(actor: AssistantActor, entities: ResolvedEntities): 
 
 async function overdueTasks(actor: AssistantActor, entities: ResolvedEntities): Promise<ExecutorPayload> {
   const assignedTo = entities.employeeId;
+  const projectId = entities.projectId;
   const [overdue, high, critical] = await Promise.all([
-    taskService.overdue({ ...LIST, assignedTo, sortBy: "dueDate", sortOrder: "asc" }, actor),
-    taskService.overdue({ ...LIST, assignedTo, priority: "HIGH", limit: 1 }, actor),
-    taskService.overdue({ ...LIST, assignedTo, priority: "CRITICAL", limit: 1 }, actor),
+    taskService.overdue({ ...LIST, assignedTo, projectId, sortBy: "dueDate", sortOrder: "asc" }, actor),
+    taskService.overdue({ ...LIST, assignedTo, projectId, priority: "HIGH", limit: 1 }, actor),
+    taskService.overdue({ ...LIST, assignedTo, projectId, priority: "CRITICAL", limit: 1 }, actor),
   ]);
   const highPriority = high.meta.total + critical.meta.total;
   return {
@@ -178,7 +180,18 @@ async function projectHealth(actor: AssistantActor, entities: ResolvedEntities):
 }
 
 async function projectTasks(actor: AssistantActor, entities: ResolvedEntities): Promise<ExecutorPayload> {
-  const result = await projectService.listTasks(entities.projectId as string, { ...LIST }, actor);
+  const status =
+    entities.status === "PENDING" ||
+    entities.status === "IN_PROGRESS" ||
+    entities.status === "COMPLETED" ||
+    entities.status === "CANCELLED"
+      ? entities.status
+      : undefined;
+  const result = await projectService.listTasks(
+    entities.projectId as string,
+    { ...LIST, status, overdue: entities.status === "OVERDUE" ? true : undefined },
+    actor,
+  );
   return {
     intent: "PROJECT_TASKS",
     data: {

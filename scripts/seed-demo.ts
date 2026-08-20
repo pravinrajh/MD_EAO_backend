@@ -8,6 +8,7 @@ import { logger } from "../src/config/logger";
 import { Customer } from "../src/models/Customer";
 import { Employee } from "../src/models/Employee";
 import { Lead } from "../src/models/Lead";
+import { Meeting } from "../src/models/Meeting";
 import { Opportunity } from "../src/models/Opportunity";
 import { Project } from "../src/models/Project";
 import { Task } from "../src/models/Task";
@@ -46,6 +47,7 @@ type SeedFile = {
     actualExpense: number;
     startOffsetDays: number;
     endOffsetDays: number;
+    customer?: string;
   }>;
   tasks: Array<{
     taskId: string;
@@ -101,6 +103,21 @@ type SeedFile = {
     closeOffsetDays: number;
     followUpOffsetDays: number;
     description: string;
+  }>;
+  meetings: Array<{
+    meetingId: string;
+    title: string;
+    description: string;
+    meetingType: string;
+    organizer: string;
+    participants: string[];
+    project?: string;
+    customer?: string;
+    location: string;
+    startOffsetHours: number;
+    durationHours: number;
+    status: string;
+    linkedTask?: string;
   }>;
 };
 
@@ -325,12 +342,13 @@ async function seedDemo(): Promise<void> {
     customerIds.set(customer.customerId, id);
   }
 
+  const opportunityIds = new Map<string, mongoose.Types.ObjectId>();
   for (const opportunity of data.opportunities) {
     const customerId = customerIds.get(opportunity.customer);
     const assignedTo = employeeIds.get(opportunity.assignee);
     if (!customerId) throw new Error(`Unknown opportunity customer ${opportunity.customer}`);
     if (!assignedTo) throw new Error(`Unknown opportunity assignee ${opportunity.assignee}`);
-    await upsert(Opportunity, { opportunityId: opportunity.opportunityId }, {
+    const id = await upsert(Opportunity, { opportunityId: opportunity.opportunityId }, {
       opportunityId: opportunity.opportunityId,
       title: opportunity.title,
       customerId,
@@ -348,6 +366,77 @@ async function seedDemo(): Promise<void> {
       deletedAt: null,
       deletedBy: null,
     });
+    opportunityIds.set(opportunity.opportunityId, id);
+
+    if (opportunity.project) {
+      const projectObjectId = projectIds.get(opportunity.project);
+      if (projectObjectId) {
+        await Project.updateOne(
+          { _id: projectObjectId, $or: [{ customerId: null }, { customerId: { $exists: false } }] },
+          { $set: { customerId } },
+        );
+      }
+    }
+  }
+
+  for (const customer of data.customers) {
+    if (!customer.sourceLead) continue;
+    const lead = data.leads.find((item) => item.leadId === customer.sourceLead);
+    if (lead?.status !== "CONVERTED") continue;
+    const opportunity = data.opportunities.find((item) => item.lead === customer.sourceLead);
+    await Lead.updateOne(
+      { leadId: customer.sourceLead },
+      {
+        $set: {
+          convertedCustomerId: customerIds.get(customer.customerId) ?? null,
+          convertedOpportunityId: opportunity ? opportunityIds.get(opportunity.opportunityId) ?? null : null,
+          convertedAt: now,
+        },
+      },
+    );
+  }
+
+  for (const projectObjectId of projectIds.values()) {
+    const project = await Project.findById(projectObjectId).select("customerId").lean();
+    if (!project?.customerId) continue;
+    await Task.updateMany({ projectId: projectObjectId }, { $set: { customerId: project.customerId } });
+  }
+
+  const meetingIds = new Map<string, mongoose.Types.ObjectId>();
+  for (const meeting of data.meetings ?? []) {
+    const organizerId = userIds.get(meeting.organizer);
+    if (!organizerId) throw new Error(`Unknown meeting organizer ${meeting.organizer}`);
+    const participants = meeting.participants.map((key) => {
+      const id = employeeIds.get(key);
+      if (!id) throw new Error(`Unknown meeting participant ${key}`);
+      return id;
+    });
+    const startTime = new Date(Date.now() + meeting.startOffsetHours * 60 * 60 * 1000);
+    const endTime = new Date(startTime.getTime() + meeting.durationHours * 60 * 60 * 1000);
+    const id = await upsert(Meeting, { meetingId: meeting.meetingId }, {
+      meetingId: meeting.meetingId,
+      title: meeting.title,
+      description: meeting.description,
+      meetingType: meeting.meetingType,
+      organizerId,
+      createdBy,
+      participants,
+      projectId: meeting.project ? projectIds.get(meeting.project) ?? null : null,
+      customerId: meeting.customer ? customerIds.get(meeting.customer) ?? null : null,
+      location: meeting.location,
+      startTime,
+      endTime,
+      timezone: "Asia/Kolkata",
+      status: meeting.status,
+      notes: "",
+      isDeleted: false,
+      deletedAt: null,
+      deletedBy: null,
+    });
+    meetingIds.set(meeting.meetingId, id);
+    if (meeting.linkedTask) {
+      await Task.updateOne({ taskId: meeting.linkedTask }, { $set: { meetingId: id } });
+    }
   }
 
   logger.info(
@@ -360,6 +449,7 @@ async function seedDemo(): Promise<void> {
       leads: data.leads.length,
       customers: data.customers.length,
       opportunities: data.opportunities.length,
+      meetings: data.meetings?.length ?? 0,
       login: "md@office.local / admin@office.local / raj@office.local",
     },
     "Demo seed completed",

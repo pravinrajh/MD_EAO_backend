@@ -10,6 +10,7 @@ export type ProjectListFilters = {
   status?: ProjectStatus;
   projectType?: ProjectType;
   managerId?: string;
+  customerId?: string;
   location?: string;
   scope?: FilterQuery<ProjectDocument>;
   skip: number;
@@ -26,6 +27,7 @@ const PROJECT_UPDATE_FIELDS = [
   "projectType",
   "managerId",
   "members",
+  "customerId",
   "status",
   "progress",
   "budget",
@@ -50,6 +52,7 @@ function pickUpdate(input: Record<string, unknown>): Record<string, unknown> {
 function stringifyIds(record: Record<string, unknown>) {
   record.id = String(record._id ?? record.id);
   if (record.managerId) record.managerId = String(record.managerId);
+  if (record.customerId) record.customerId = String(record.customerId);
   if (record.createdBy) record.createdBy = String(record.createdBy);
   if (record.deletedBy) record.deletedBy = String(record.deletedBy);
   if (Array.isArray(record.members)) {
@@ -81,6 +84,7 @@ function buildFilter(filters: ProjectListFilters): FilterQuery<ProjectDocument> 
   if (filters.status) query.status = filters.status;
   if (filters.projectType) query.projectType = filters.projectType;
   if (filters.managerId) query.managerId = filters.managerId;
+  if (filters.customerId) query.customerId = filters.customerId;
   if (filters.location) query.location = filters.location;
 
   if (filters.search) {

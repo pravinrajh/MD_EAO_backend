@@ -13,6 +13,8 @@ export type TaskDocument = mongoose.Document & {
   assignedTo: mongoose.Types.ObjectId;
   createdBy: mongoose.Types.ObjectId;
   projectId: mongoose.Types.ObjectId | null;
+  customerId: mongoose.Types.ObjectId | null;
+  meetingId: mongoose.Types.ObjectId | null;
   priority: TaskPriority;
   status: TaskStatus;
   dueDate: Date | null;
@@ -36,7 +38,9 @@ const taskSchema = new Schema<TaskDocument>(
     description: { type: String, default: "", trim: true, maxlength: 4000 },
     assignedTo: { type: Schema.Types.ObjectId, ref: "Employee", required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    projectId: { type: Schema.Types.ObjectId, default: null },
+    projectId: { type: Schema.Types.ObjectId, ref: "Project", default: null },
+    customerId: { type: Schema.Types.ObjectId, ref: "Customer", default: null },
+    meetingId: { type: Schema.Types.ObjectId, ref: "Meeting", default: null },
     priority: { type: String, enum: TASK_PRIORITIES, required: true, default: "MEDIUM" },
     status: { type: String, enum: TASK_STATUSES, required: true, default: "PENDING" },
     dueDate: { type: Date, default: null },
@@ -80,5 +84,7 @@ taskSchema.index({ isDeleted: 1, updatedAt: -1 });
 taskSchema.index({ isDeleted: 1, projectId: 1, status: 1 });
 taskSchema.index({ isDeleted: 1, projectId: 1, dueDate: 1 });
 taskSchema.index({ isDeleted: 1, projectId: 1, assignedTo: 1 });
+taskSchema.index({ isDeleted: 1, customerId: 1, status: 1 });
+taskSchema.index({ isDeleted: 1, meetingId: 1, status: 1 });
 
 export const Task = mongoose.model<TaskDocument>("Task", taskSchema);

@@ -105,7 +105,7 @@ async function createTask(token: string, assignedTo: string, extra: Record<strin
       assignedTo,
       projectId: extra.projectId ?? null,
       priority: extra.priority ?? "HIGH",
-      dueDate: extra.dueDate ?? "2026-08-20T16:00:00.000Z",
+      dueDate: extra.dueDate ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       ...extra,
     });
 }
