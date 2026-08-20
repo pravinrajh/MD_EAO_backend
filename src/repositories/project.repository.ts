@@ -1,4 +1,4 @@
-import type { FilterQuery } from "mongoose";
+import type { ClientSession, FilterQuery } from "mongoose";
 import { Project, type ProjectDocument } from "../models/Project";
 import { PROJECT_SAFE_FIELDS, type ProjectStatus, type ProjectType } from "../utils/constants";
 import { escapeRegex } from "../utils/pagination";
@@ -145,6 +145,23 @@ export const projectRepository = {
         runValidators: true,
       },
     ).select(PROJECT_SAFE_FIELDS);
+  },
+
+  incrementActualExpense(id: string, delta: number, session?: ClientSession | null) {
+    return Project.findByIdAndUpdate(
+      id,
+      { $inc: { actualExpense: delta } },
+      { new: true, ...(session ? { session } : {}) },
+    ).select(PROJECT_SAFE_FIELDS);
+  },
+
+  findAccessibleIds(employeeId: string) {
+    return Project.find({
+      isDeleted: false,
+      $or: [{ managerId: employeeId }, { members: employeeId }],
+    })
+      .select("_id")
+      .lean();
   },
 
   toPublic: toPublicProject,

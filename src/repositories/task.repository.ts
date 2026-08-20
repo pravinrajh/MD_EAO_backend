@@ -187,6 +187,15 @@ export const taskRepository = {
     ).select(TASK_SAFE_FIELDS);
   },
 
+  updateByIdIfStatus(id: string, expectedStatus: TaskStatus, input: Record<string, unknown>) {
+    const update = pickTaskUpdate(input);
+    return Task.findOneAndUpdate(
+      { _id: id, status: expectedStatus, isDeleted: false },
+      { $set: update },
+      { new: true, runValidators: true },
+    ).select(TASK_SAFE_FIELDS);
+  },
+
   async counts(scope: FilterQuery<TaskDocument> | undefined, now = new Date()) {
     const match: FilterQuery<TaskDocument> = { isDeleted: false, ...(scope ?? {}) };
     if (typeof match.projectId === "string") {

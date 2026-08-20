@@ -27,6 +27,10 @@ npm run dev
 
 Requires MongoDB at `mongodb://127.0.0.1:27017/md_ai_office`.
 
+Default HTTP port is **5050**. macOS AirPlay Receiver already binds **5000** and Chrome will show `HTTP ERROR 403` / “Access to localhost was denied” if the API is pointed there.
+
+Swagger UI: [http://localhost:5050/api-docs](http://localhost:5050/api-docs)
+
 ## Health
 
 ```http
@@ -109,7 +113,7 @@ MD and ADMIN manage all tasks. MANAGER creates and manages team tasks. EMPLOYEE 
 
 ## Projects
 
-A Project is a business operation. Tasks link to it with `Task.projectId` — projects do not embed task arrays. `projectId` values (`PROJ-000001`) use the same atomic counter. Money is stored as **integers in whole INR rupees** (no floating-point). `remainingBudget` is derived (`budget - actualExpense`). `actualExpense` is not writable here; Finance will own it later.
+A Project is a business operation. Tasks link to it with `Task.projectId` — projects do not embed task arrays. `projectId` values (`PROJ-000001`) use the same atomic counter. Money is stored as **integers in whole INR rupees** (no floating-point). `remainingBudget` is derived (`budget - actualExpense`). `actualExpense` is owned by Finance: completed project expenses increment it; it is not writable via Project PATCH.
 
 ```http
 GET    /api/v1/projects
@@ -194,7 +198,212 @@ GET    /api/v1/sales/follow-ups
 
 MD and ADMIN have full CRM access. MANAGER manages team sales records. EMPLOYEE can create leads/activities and access records assigned to them. Conversion is idempotent: repeating `POST /leads/:id/convert` does not create a second customer or opportunity.
 
-## Next phases
+## Finance & accounting
 
-Finance, dashboard, assistant, WhatsApp, Swagger, Docker.
-# MD_EAO_backend
+Foundation ledger only — not payroll, invoices, payment gateways, GST, or Tally.
+
+**Money:** amounts are **integers in whole INR rupees** (same as Project `budget` and CRM `estimatedValue`). Never JavaScript floats. Every monetary record has `amount` + `currency` (INR). Transaction amounts are always **> 0**; direction comes from `type` (`INCOME` / `EXPENSE` / `TRANSFER`), not a negative sign.
+
+**Balances:** `Account.currentBalance` starts as `openingBalance` and changes **only** through completed transactions (MongoDB `$inc` inside `withTransaction`). PATCH cannot set `currentBalance`, `openingBalance`, `code`, or `accountId`. Insufficient funds returns **409**. Inactive accounts cannot receive transactions.
+
+**IDs:** `ACC-000001`, `CAT-000001`, `TXN-000001`, `BUD-000001` from the existing atomic counter — never `countDocuments() + 1`.
+
+**Idempotency:** `Idempotency-Key` on income, expense, and transfer. The same key returns the existing transaction; it is unique when non-empty.
+
+**Immutability:** `COMPLETED` transactions are historical records. Allowed status moves: `PENDING → COMPLETED | CANCELLED`. Completing twice does not credit the account twice (`findOneAndUpdate` claims `PENDING` first).
+
+**Reports:** MongoDB aggregations only (no loading the collection into Node). Monthly grouping uses `APP_TIMEZONE` (default `Asia/Kolkata`). Customer finance is **recorded** income/expense, not accounts receivable.
+
+**Authorization:** MD/ADMIN — full finance. MANAGER — accounts/categories list; post income/expense and budgets only for projects they manage; no transfers and no company-wide reports without a project they can access. EMPLOYEE — no chart of accounts; view project finance only when they belong to the project.
+
+```http
+GET    /api/v1/finance/accounts
+POST   /api/v1/finance/accounts
+GET    /api/v1/finance/accounts/:id
+PATCH  /api/v1/finance/accounts/:id
+
+GET    /api/v1/finance/categories
+POST   /api/v1/finance/categories
+GET    /api/v1/finance/categories/:id
+PATCH  /api/v1/finance/categories/:id
+DELETE /api/v1/finance/categories/:id
+
+GET    /api/v1/finance/transactions
+POST   /api/v1/finance/transactions/income
+POST   /api/v1/finance/transactions/expense
+POST   /api/v1/finance/transactions/transfer
+GET    /api/v1/finance/transactions/:id
+PATCH  /api/v1/finance/transactions/:id/status
+
+GET    /api/v1/finance/budgets
+POST   /api/v1/finance/budgets
+GET    /api/v1/finance/budgets/:id
+PATCH  /api/v1/finance/budgets/:id
+DELETE /api/v1/finance/budgets/:id
+GET    /api/v1/finance/budgets/:id/summary
+
+GET    /api/v1/finance/summary
+GET    /api/v1/finance/reports/monthly
+GET    /api/v1/finance/reports/expenses-by-category
+GET    /api/v1/finance/projects/:id/summary
+GET    /api/v1/finance/customers/:id/summary
+```
+
+Generic `externalReference`, `referenceType`, and `referenceId` are reserved for a future Invoice or Tally connector. Do not add Tally-specific fields to the core models.
+
+## Executive dashboard
+
+Live MD dashboard. Values come from MongoDB aggregations over Tasks, Meetings, Projects, CRM, and Finance. Nothing is hardcoded. Money stays **integers in whole INR rupees**. Timezone is `APP_TIMEZONE` (default `Asia/Kolkata`).
+
+MD/ADMIN see the company dashboard. MANAGER sees team/project-scoped data. EMPLOYEE sees only assigned work; company finance is not returned.
+
+```http
+GET /api/v1/dashboard
+GET /api/v1/dashboard/md
+GET /api/v1/dashboard/me
+GET /api/v1/dashboard/attention
+GET /api/v1/dashboard/project-health
+GET /api/v1/dashboard/weekly-financial-requirement
+GET /api/v1/dashboard/upcoming-meetings
+GET /api/v1/dashboard/activity
+GET /api/v1/dashboard/morning-report
+```
+
+Optional query: `date=YYYY-MM-DD`, `from`, `to`. Project health supports `page`, `limit` (max 50), `status`, `health` (`GREEN` / `YELLOW` / `RED`).
+
+Project health is the existing `HEALTHY` / `ATTENTION` / `CRITICAL` rules, mapped to GREEN / YELLOW / RED for Flutter. Weekly cash need uses **completed and pending** finance transactions dated this week — payables/invoices are not invented.
+
+There is no AuditLog yet; recent activity is a bounded merge of module timestamps. DashboardService methods are reusable for a later Assistant and WhatsApp layer. Redis is not required; cache key helpers exist for a later cache.
+
+Optional large-data seed (not run automatically):
+
+```bash
+npm run seed:performance
+```
+
+## Assistant Query API
+
+Read-only natural-language queries over live MongoDB data. The assistant never creates, updates, or deletes business records. The only write is `AssistantQuery` history (`QRY-000001`). Intent routing is deterministic (`RuleBasedQueryEngine`); an LLM is not required and must never query MongoDB or bypass RBAC.
+
+```http
+POST /api/v1/assistant/query
+GET  /api/v1/assistant/history
+```
+
+`POST /query` is authenticated and rate-limited. Identify the user from `req.user.id` only — never from the body. History is the current user's queries only.
+
+```json
+{ "message": "What tasks are pending?", "conversationId": "CONV-001" }
+```
+
+Response `data` includes `queryId`, `intent`, `answer`, structured `data`, `sources`, and `confidence`. Flutter should use `data`, not parse the sentence.
+
+Unsupported questions (for example weather) return intent `UNSUPPORTED` with confidence `0`. Write requests such as "create a task" remain unsupported on the Query API — use the Action API instead.
+
+## Assistant Action API
+
+Authenticated write path for the assistant. Natural language is never authorization and never a MongoDB command. Every action is: intent → entity resolution → module RBAC → whitelist DTO → existing business service.
+
+```http
+POST /api/v1/assistant/action
+POST /api/v1/assistant/action/:actionId/confirm
+GET  /api/v1/assistant/actions/history
+```
+
+Identify the user from `req.user.id` only. Optional `Idempotency-Key` (max 128) returns the stored result and does not repeat the business write. Action IDs are `ACT-000001` from the `assistantActionId` counter (separate from CRM sales activity IDs).
+
+Supported intents: create/update/assign/complete task; create/update/cancel meeting; create/update project; create/update lead, opportunity, and customer; create reminder. Finance writes, bulk deletes, and other destructive operations return `UNSUPPORTED`.
+
+Cancel meeting (and completing/cancelling a project) returns `REQUIRES_CONFIRMATION`. Confirm is bound to `actionId` + current user; another user cannot confirm it. Query API stays read-only.
+
+## Reminders and notifications
+
+In-app reminders and notifications for tasks, meetings, CRM follow-ups, projects, and custom alerts. IDs are `REM-000001` and `NOTIF-000001` from atomic counters. A single interval worker claims due reminders with `findOneAndUpdate` so only one instance processes each row.
+
+```http
+GET    /api/v1/reminders
+POST   /api/v1/reminders
+GET    /api/v1/reminders/today
+GET    /api/v1/reminders/upcoming
+GET    /api/v1/reminders/:id
+PATCH  /api/v1/reminders/:id
+PATCH  /api/v1/reminders/:id/complete
+PATCH  /api/v1/reminders/:id/cancel
+PATCH  /api/v1/reminders/:id/snooze
+
+GET    /api/v1/notifications
+GET    /api/v1/notifications/unread-count
+GET    /api/v1/notifications/:id
+PATCH  /api/v1/notifications/:id/read
+PATCH  /api/v1/notifications/:id/unread
+PATCH  /api/v1/notifications/read-all
+DELETE /api/v1/notifications/:id
+
+GET    /api/v1/notification-preferences
+PATCH  /api/v1/notification-preferences
+```
+
+`userId` / `recipientId` always come from `req.user.id`. In-app is the default channel. Email/SMS/push remain interfaces. WhatsApp can deliver proactive notifications when the user has linked an identity and `channels.whatsapp = true`. Recurring reminders keep one document and advance `nextRunAt`.
+
+## WhatsApp Webhook API
+
+WhatsApp is a transport, not a second AI. Incoming text is normalized, mapped to a linked user, then passed to the existing Assistant Query or Action services. No JWT is minted for the webhook; Meta signature + verify token are used instead.
+
+```http
+GET  /api/v1/webhooks/whatsapp
+POST /api/v1/webhooks/whatsapp
+POST /api/v1/whatsapp/link-code
+DELETE /api/v1/whatsapp/link-code
+```
+
+Linking is explicit: authenticated users create a 6-digit code, then send `LINK 123456` from WhatsApp. Unknown numbers never receive company data.
+
+## Swagger / OpenAPI
+
+Interactive docs (disabled in production unless `SWAGGER_ENABLED=true`):
+
+```http
+GET /api-docs
+GET /api-docs.json
+```
+
+Use the Authorize button with a JWT from `POST /api/v1/auth/login`. WhatsApp webhooks are documented as provider-signed, not JWT.
+
+```bash
+npm run swagger:validate
+```
+
+Set `SWAGGER_SERVER_URL` to the public origin in non-local environments. Never put secrets in the spec.
+
+## Testing
+
+Jest + Supertest. Automated suites use **MongoMemoryServer**, not the developer or production database. `.env.test` documents `ai_md_test` for any runner that points at a real MongoDB.
+
+```bash
+npm test
+npm run test:unit
+npm run test:integration
+npm run test:e2e
+npm run test:security
+npm run test:coverage
+npm run swagger:validate
+```
+
+`npm test` does not seed performance data and does not run k6.
+
+## Performance testing
+
+Dedicated database only (name must contain `performance`, example `ai_md_performance`). See `performance/README.md`.
+
+```bash
+PERF_MONGODB_URI=mongodb://127.0.0.1:27017/ai_md_performance npm run seed:performance -- --scale=small
+PERF_MONGODB_URI=mongodb://127.0.0.1:27017/ai_md_performance npm run perf:explain
+npm run test:performance
+CONFIRM_PERF_CLEANUP=YES PERF_MONGODB_URI=mongodb://127.0.0.1:27017/ai_md_performance npm run perf:cleanup
+```
+
+Large seeds require `CONFIRM_PERF_SEED=YES`. Load tests need the k6 binary and a running API. Unrun jobs are recorded as **NOT EXECUTED** — numbers are never invented.
+
+## Next phase
+
+Step 16 — production hardening + Docker. Not implemented yet.

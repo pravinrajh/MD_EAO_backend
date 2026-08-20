@@ -3,11 +3,14 @@ import { employeeRepository } from "../repositories/employee.repository";
 import { projectRepository, type ProjectSortField } from "../repositories/project.repository";
 import { taskRepository } from "../repositories/task.repository";
 import { hydrateTaskRecords } from "./task.service";
-import type { ProjectHealth, ProjectStatus, ProjectType } from "../utils/constants";
+import type { ProjectStatus, ProjectType } from "../utils/constants";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../utils/errors";
 import { assertObjectId } from "../utils/objectId";
 import { buildPaginationMeta, parsePagination } from "../utils/pagination";
 import { nextProjectId } from "../utils/sequence";
+import { projectHealth, remainingBudget } from "./project.health";
+
+export { projectHealth, remainingBudget } from "./project.health";
 import {
   type Actor,
   assertCanChangeManager,
@@ -18,6 +21,7 @@ import {
   canUpdateBudget,
   isPrivileged,
 } from "./project.policy";
+import { hookProjectAtRisk } from "./reminder/hooks";
 
 const PROJECT_CODE_RETRIES = 3;
 
@@ -94,22 +98,6 @@ function asProject(record: Record<string, unknown>) {
     progress: Number(record.progress ?? 0),
     code: typeof record.code === "string" ? record.code : "",
   };
-}
-
-function remainingBudget(budget: number, actualExpense: number): number {
-  return budget - actualExpense;
-}
-
-export function projectHealth(input: {
-  status: ProjectStatus;
-  remainingBudget: number;
-  overdueTasks: number;
-}): ProjectHealth {
-  if (input.status === "CANCELLED" || input.status === "AT_RISK" || input.remainingBudget < 0) {
-    return "CRITICAL";
-  }
-  if (input.overdueTasks > 0) return "ATTENTION";
-  return "HEALTHY";
 }
 
 async function actorEmployeeId(actor: Actor): Promise<string | null> {
@@ -337,7 +325,19 @@ export const projectService = {
     const updated = await projectRepository.updateById(id, patch);
     if (!updated) throw new NotFoundError("Project not found");
     logger.info({ projectId: updated.projectId, status }, "Project status updated");
-    return this.getById(id, actor);
+    const result = await this.getById(id, actor);
+    if (status === "AT_RISK") {
+      await hookProjectAtRisk(
+        {
+          _id: updated._id,
+          id,
+          name: updated.name,
+          managerId: updated.managerId,
+        },
+        actor,
+      );
+    }
+    return result;
   },
 
   async updateManager(id: string, managerId: string, actor: Actor) {
@@ -423,6 +423,8 @@ export const projectService = {
           status: project.status as ProjectStatus,
           remainingBudget: remaining,
           overdueTasks: tasks.overdue,
+          budget,
+          actualExpense,
         }),
       },
       financial: {

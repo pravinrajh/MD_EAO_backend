@@ -25,6 +25,12 @@ pids/
 # Tests and coverage
 coverage/
 .nyc_output/
+test-report/**
+!test-report/README.md
+!test-report/.gitkeep
+
+# Performance seed dumps
+performance-data/
 
 # OS and editor
 .DS_Store

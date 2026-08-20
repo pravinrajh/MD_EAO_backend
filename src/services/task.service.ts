@@ -22,6 +22,7 @@ import {
   isPrivileged,
 } from "./task.policy";
 import { assertCanView as assertCanViewProject } from "./project.policy";
+import { hookTaskCreated, hookTaskUpdated } from "./reminder/hooks";
 
 const ALLOWED_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   PENDING: ["IN_PROGRESS", "CANCELLED"],
@@ -374,7 +375,22 @@ export const taskService = {
     }
 
     logger.info({ taskId: created.taskId, createdBy: actor.id }, "Task created");
-    return this.getById(publicId(created), actor);
+    const result = await this.getById(publicId(created), actor);
+    await hookTaskCreated(
+      {
+        _id: created._id,
+        id: publicId(created),
+        taskId: created.taskId,
+        title: created.title,
+        description: created.description,
+        dueDate: created.dueDate,
+        reminderAt: created.reminderAt,
+        assignedTo: input.assignedTo,
+        priority: created.priority,
+      },
+      actor,
+    );
+    return result;
   },
 
   async update(id: string, input: UpdateTaskInput, actor: Actor) {
@@ -410,7 +426,25 @@ export const taskService = {
     const updated = await taskRepository.updateById(id, patch);
     if (!updated) throw new NotFoundError("Task not found");
     logger.info({ taskId: updated.taskId }, "Task updated");
-    return this.getById(id, actor);
+    const result = await this.getById(id, actor);
+    if (input.dueDate !== undefined || input.reminderAt !== undefined || input.assignedTo) {
+      await hookTaskUpdated(
+        {
+          _id: updated._id,
+          id,
+          taskId: updated.taskId,
+          title: updated.title,
+          description: updated.description,
+          dueDate: updated.dueDate,
+          reminderAt: updated.reminderAt,
+          assignedTo: updated.assignedTo,
+          priority: updated.priority,
+        },
+        actor,
+        Boolean(input.assignedTo),
+      );
+    }
+    return result;
   },
 
   async assign(id: string, assignedTo: string, actor: Actor) {
@@ -453,8 +487,10 @@ export const taskService = {
       if (input.reason !== undefined) patch.cancellationReason = input.reason;
     }
 
-    const updated = await taskRepository.updateById(id, patch);
-    if (!updated) throw new NotFoundError("Task not found");
+    const updated = await taskRepository.updateByIdIfStatus(id, task.status, patch);
+    if (!updated) {
+      throw new ConflictError("Task was updated concurrently");
+    }
     logger.info({ taskId: updated.taskId, status: input.status }, "Task status updated");
     return this.getById(id, actor);
   },

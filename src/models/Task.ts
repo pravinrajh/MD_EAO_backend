@@ -74,6 +74,8 @@ taskSchema.index({ isDeleted: 1, assignedTo: 1, status: 1 });
 taskSchema.index({ isDeleted: 1, assignedTo: 1, dueDate: 1 });
 // Overdue, today, and due-date range queries.
 taskSchema.index({ isDeleted: 1, status: 1, dueDate: 1 });
+// Dashboard recent activity.
+taskSchema.index({ isDeleted: 1, updatedAt: -1 });
 // Ready for project task lists without storing tasks on the Project document.
 taskSchema.index({ isDeleted: 1, projectId: 1, status: 1 });
 taskSchema.index({ isDeleted: 1, projectId: 1, dueDate: 1 });

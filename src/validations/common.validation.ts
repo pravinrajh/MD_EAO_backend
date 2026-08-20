@@ -35,11 +35,13 @@ export function rejectMongoOperators<T extends Record<string, unknown>>(value: T
   }
 }
 
-/** Whole INR rupees. Matches Project monetary storage. */
+/** Whole INR rupees. Matches Project and CRM monetary storage. */
 export const moneyIntSchema = z
   .number({ invalid_type_error: "Monetary values must be a number" })
   .int("Monetary values must be whole currency units")
   .min(0)
   .max(Number.MAX_SAFE_INTEGER);
+
+export const positiveMoneyIntSchema = moneyIntSchema.min(1, "Amount must be greater than zero");
 
 export const probabilitySchema = z.number().int().min(0).max(100);

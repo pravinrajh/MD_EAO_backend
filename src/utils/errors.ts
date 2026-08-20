@@ -48,3 +48,9 @@ export class ValidationError extends AppError {
     super(message, 422, errors);
   }
 }
+
+export class TimeoutError extends AppError {
+  constructor(message = "The request took too long to complete", errors: unknown[] = []) {
+    super(message, 504, errors);
+  }
+}

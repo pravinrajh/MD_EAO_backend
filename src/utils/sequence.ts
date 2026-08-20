@@ -48,3 +48,51 @@ export async function nextOpportunityId(session?: ClientSession | null): Promise
 export async function nextActivityId(session?: ClientSession | null): Promise<string> {
   return padded("ACT", await nextSequence("activityId", session));
 }
+
+export async function nextAccountId(session?: ClientSession | null): Promise<string> {
+  return padded("ACC", await nextSequence("accountId", session));
+}
+
+export async function nextFinanceCategoryId(session?: ClientSession | null): Promise<string> {
+  return padded("CAT", await nextSequence("financeCategoryId", session));
+}
+
+export async function nextTransactionId(session?: ClientSession | null): Promise<string> {
+  return padded("TXN", await nextSequence("transactionId", session));
+}
+
+export async function nextBudgetId(session?: ClientSession | null): Promise<string> {
+  return padded("BUD", await nextSequence("budgetId", session));
+}
+
+export async function nextQueryId(session?: ClientSession | null): Promise<string> {
+  return padded("QRY", await nextSequence("queryId", session));
+}
+
+export async function nextAssistantActionId(session?: ClientSession | null): Promise<string> {
+  return padded("ACT", await nextSequence("assistantActionId", session));
+}
+
+export async function nextReminderId(session?: ClientSession | null): Promise<string> {
+  return padded("REM", await nextSequence("reminderId", session));
+}
+
+export async function nextNotificationId(session?: ClientSession | null): Promise<string> {
+  return padded("NOTIF", await nextSequence("notificationId", session));
+}
+
+export async function nextWhatsAppEventId(session?: ClientSession | null): Promise<string> {
+  return padded("WAEVT", await nextSequence("whatsappEventId", session));
+}
+
+export async function nextWhatsAppMessageId(session?: ClientSession | null): Promise<string> {
+  return padded("WAMSG", await nextSequence("whatsappMessageId", session));
+}
+
+export async function nextWhatsAppConversationId(session?: ClientSession | null): Promise<string> {
+  return padded("WACONV", await nextSequence("whatsappConversationId", session));
+}
+
+export async function nextWhatsAppIdentityId(session?: ClientSession | null): Promise<string> {
+  return padded("WAID", await nextSequence("whatsappIdentityId", session));
+}

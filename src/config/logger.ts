@@ -11,6 +11,12 @@ const redactPaths = [
   "headers.authorization",
   "MAYTAPI_TOKEN",
   "MAYTAPI_WEBHOOK_SECRET",
+  "WHATSAPP_ACCESS_TOKEN",
+  "WHATSAPP_APP_SECRET",
+  "WHATSAPP_VERIFY_TOKEN",
+  "access_token",
+  "appSecret",
+  "verifyToken",
   "req.headers.authorization",
 ];
 

@@ -8,8 +8,18 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "lint": "tsc --noEmit",
-    "test": "jest --runInBand --forceExit",
-    "create-admin": "tsx scripts/create-admin.ts"
+    "test": "NODE_ENV=test jest --runInBand --forceExit",
+    "test:unit": "NODE_ENV=test jest --runInBand --forceExit tests/unit",
+    "test:integration": "NODE_ENV=test jest --runInBand --forceExit --testPathIgnorePatterns=/tests/unit/ --testPathIgnorePatterns=/tests/e2e/",
+    "test:e2e": "NODE_ENV=test jest --runInBand --forceExit tests/e2e",
+    "test:security": "NODE_ENV=test jest --runInBand --forceExit tests/security.test.ts tests/auth.test.ts tests/concurrency.test.ts",
+    "test:coverage": "NODE_ENV=test jest --runInBand --forceExit --coverage --json --outputFile=test-report/integration-results.json",
+    "test:performance": "tsx scripts/run-performance-suite.ts",
+    "swagger:validate": "tsx scripts/swagger-validate.ts",
+    "create-admin": "tsx scripts/create-admin.ts",
+    "seed:performance": "tsx scripts/seed-performance.ts",
+    "perf:explain": "tsx scripts/explain-queries.ts",
+    "perf:cleanup": "tsx scripts/cleanup-performance.ts"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -28,6 +38,7 @@
     "mongoose": "^8.9.5",
     "pino": "^9.6.0",
     "pino-http": "^10.4.0",
+    "swagger-ui-express": "^5.0.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -39,6 +50,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.10.5",
     "@types/supertest": "^6.0.2",
+    "@types/swagger-ui-express": "^4.1.8",
     "jest": "^29.7.0",
     "mongodb-memory-server": "^11.2.0",
     "pino-pretty": "^13.0.0",

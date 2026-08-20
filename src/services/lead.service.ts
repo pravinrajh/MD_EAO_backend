@@ -24,6 +24,7 @@ import {
   hydrateAssignedRecords,
   resolveCrmScope,
 } from "./crm.context";
+import { hookCrmFollowUp } from "./reminder/hooks";
 
 const ALLOWED_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
   NEW: ["CONTACTED", "QUALIFIED", "UNQUALIFIED", "LOST"],
@@ -191,7 +192,21 @@ export const leadService = {
     });
 
     logger.info({ leadId: created.leadId, createdBy: actor.id }, "Lead created");
-    return this.getById(String(created._id), actor);
+    const result = await this.getById(String(created._id), actor);
+    if (created.nextFollowUpAt) {
+      await hookCrmFollowUp(
+        {
+          _id: created._id,
+          assignedTo: created.assignedTo,
+          nextFollowUpAt: created.nextFollowUpAt,
+          name: created.name,
+          companyName: created.companyName,
+        },
+        actor,
+        "LEAD",
+      );
+    }
+    return result;
   },
 
   async update(id: string, input: UpdateLeadInput, actor: Actor) {
@@ -226,7 +241,21 @@ export const leadService = {
 
     const updated = await leadRepository.updateById(id, patch);
     if (!updated) throw new NotFoundError("Lead not found");
-    return this.getById(id, actor);
+    const result = await this.getById(id, actor);
+    if (input.nextFollowUpAt) {
+      await hookCrmFollowUp(
+        {
+          _id: updated._id,
+          assignedTo: updated.assignedTo,
+          nextFollowUpAt: updated.nextFollowUpAt,
+          name: updated.name,
+          companyName: updated.companyName,
+        },
+        actor,
+        "LEAD",
+      );
+    }
+    return result;
   },
 
   async updateStatus(id: string, status: LeadStatus, actor: Actor) {
@@ -256,7 +285,19 @@ export const leadService = {
     }
     const updated = await leadRepository.updateById(id, { nextFollowUpAt });
     if (!updated) throw new NotFoundError("Lead not found");
-    return this.getById(id, actor);
+    const result = await this.getById(id, actor);
+    await hookCrmFollowUp(
+      {
+        _id: updated._id,
+        assignedTo: updated.assignedTo,
+        nextFollowUpAt: updated.nextFollowUpAt,
+        name: updated.name,
+        companyName: updated.companyName,
+      },
+      actor,
+      "LEAD",
+    );
+    return result;
   },
 
   async convert(id: string, input: ConvertLeadInput, actor: Actor) {

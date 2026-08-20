@@ -1,0 +1,21 @@
+import { Router } from "express";
+import { assistantController } from "../controllers/assistant.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { assistantQueryRateLimiter } from "../middlewares/rateLimit.middleware";
+import { validate } from "../middlewares/validation.middleware";
+import { assistantHistoryQuerySchema, queryAssistantSchema } from "../validations/assistant.validation";
+
+const router = Router();
+
+router.use(authenticate);
+
+router.post(
+  "/query",
+  assistantQueryRateLimiter,
+  validate(queryAssistantSchema),
+  assistantController.queryAssistant,
+);
+
+router.get("/history", validate(assistantHistoryQuerySchema, "query"), assistantController.getAssistantHistory);
+
+export default router;

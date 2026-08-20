@@ -19,6 +19,7 @@ import {
   assertCanView,
   isPrivileged,
 } from "./meeting.policy";
+import { hookMeetingCancelled, hookMeetingCreated } from "./reminder/hooks";
 
 const MEETING_ID_RETRIES = 3;
 const CLOSED_STATUSES: MeetingStatus[] = ["COMPLETED", "CANCELLED"];
@@ -189,6 +190,44 @@ async function assertNoConflicts(participantIds: string[], startTime: Date, endT
   }
 }
 
+async function rejectLostConflictRace(
+  meetingId: string,
+  participantIds: string[],
+  startTime: Date,
+  endTime: Date,
+) {
+  const overlapping = await meetingRepository.findConflicts({
+    participantIds,
+    startTime,
+    endTime,
+    excludeId: meetingId,
+  });
+  if (overlapping.length === 0) return;
+
+  const lost = overlapping.some((meeting) => String(meeting._id) < meetingId);
+  if (!lost) return;
+
+  await meetingRepository.updateById(meetingId, {
+    isDeleted: true,
+    deletedAt: new Date(),
+  });
+
+  const errors: Record<string, unknown>[] = [];
+  for (const meeting of overlapping) {
+    const members = (meeting.participants ?? []).map((item) => String(item));
+    for (const employeeId of participantIds) {
+      if (!members.includes(employeeId)) continue;
+      errors.push({
+        employeeId,
+        meetingId: meeting.meetingId,
+        startTime: meeting.startTime,
+        endTime: meeting.endTime,
+      });
+    }
+  }
+  throw new ConflictError("Meeting conflict detected", errors);
+}
+
 async function loadMeeting(id: string) {
   assertObjectId(id);
   const meeting = await meetingRepository.findById(id);
@@ -305,8 +344,22 @@ export const meetingService = {
     }
 
     if (!created) throw new ConflictError("Unable to generate a unique meeting ID");
+    await rejectLostConflictRace(String(created._id), participants, input.startTime, input.endTime);
     logger.info({ meetingId: created.meetingId, organizerId: actor.id }, "Meeting created");
-    return this.getById(String(created._id), actor);
+    const result = await this.getById(String(created._id), actor);
+    await hookMeetingCreated(
+      {
+        _id: created._id,
+        id: String(created._id),
+        meetingId: created.meetingId,
+        title: created.title,
+        startTime: created.startTime,
+        timezone: created.timezone,
+        organizerId: created.organizerId,
+      },
+      actor,
+    );
+    return result;
   },
 
   async update(id: string, input: UpdateMeetingInput, actor: Actor) {
@@ -403,6 +456,14 @@ export const meetingService = {
     });
     if (!updated) throw new NotFoundError("Meeting not found");
     logger.info({ meetingId: updated.meetingId }, "Meeting cancelled");
+    await hookMeetingCancelled({
+      _id: updated._id,
+      id: String(updated._id),
+      meetingId: updated.meetingId,
+      title: updated.title,
+      organizerId: updated.organizerId,
+      participants: updated.participants,
+    });
     return this.getById(id, actor);
   },
 
@@ -419,7 +480,8 @@ export const meetingService = {
   },
 
   today(query: Record<string, unknown>, actor: Actor) {
-    const { start, end } = getZonedDayRange(new Date(), env.APP_TIMEZONE);
+    const now = query.now instanceof Date ? query.now : new Date();
+    const { start, end } = getZonedDayRange(now, env.APP_TIMEZONE);
     return listMeetings({ ...query, sortBy: "startTime", sortOrder: "asc" }, actor, {
       overlapStart: start,
       overlapEnd: end,
@@ -428,7 +490,7 @@ export const meetingService = {
 
   upcoming(query: Record<string, unknown>, actor: Actor) {
     const days = typeof query.days === "number" ? query.days : 7;
-    const now = new Date();
+    const now = query.now instanceof Date ? query.now : new Date();
     const until = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
     return listMeetings(
       { ...query, sortBy: query.sortBy ?? "startTime", sortOrder: query.sortOrder ?? "asc" },

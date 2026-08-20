@@ -22,6 +22,7 @@ import {
   visibilityFilter,
 } from "./crm.policy";
 import { ID_RETRIES, assertAssignableEmployee, hydrateAssignedRecords, resolveCrmScope } from "./crm.context";
+import { hookCrmFollowUp } from "./reminder/hooks";
 
 const ALLOWED_TRANSITIONS: Record<OpportunityStage, OpportunityStage[]> = {
   NEW: ["QUALIFICATION", "LOST"],
@@ -209,7 +210,20 @@ export const opportunityService = {
     }
     if (!created) throw new ConflictError("Unable to generate a unique opportunity ID");
     logger.info({ opportunityId: created.opportunityId, createdBy: actor.id }, "Opportunity created");
-    return this.getById(String(created._id), actor);
+    const result = await this.getById(String(created._id), actor);
+    if (created.nextFollowUpAt) {
+      await hookCrmFollowUp(
+        {
+          _id: created._id,
+          assignedTo: created.assignedTo,
+          nextFollowUpAt: created.nextFollowUpAt,
+          title: created.title,
+        },
+        actor,
+        "OPPORTUNITY",
+      );
+    }
+    return result;
   },
 
   async update(id: string, input: UpdateOpportunityInput, actor: Actor) {
@@ -226,7 +240,20 @@ export const opportunityService = {
 
     const updated = await opportunityRepository.updateById(id, input);
     if (!updated) throw new NotFoundError("Opportunity not found");
-    return this.getById(id, actor);
+    const result = await this.getById(id, actor);
+    if (input.nextFollowUpAt) {
+      await hookCrmFollowUp(
+        {
+          _id: updated._id,
+          assignedTo: updated.assignedTo,
+          nextFollowUpAt: updated.nextFollowUpAt,
+          title: updated.title,
+        },
+        actor,
+        "OPPORTUNITY",
+      );
+    }
+    return result;
   },
 
   async updateStage(id: string, input: { stage: OpportunityStage; lostReason?: string }, actor: Actor) {
