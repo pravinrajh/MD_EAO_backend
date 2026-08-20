@@ -41,6 +41,15 @@ export const authController = {
     });
   }),
 
+  updateMe: asyncHandler(async (req: Request, res: Response) => {
+    const user = await authService.updateProfile(req.user!.id, req.body);
+    return sendSuccess({
+      res,
+      message: "Profile updated successfully",
+      data: user,
+    });
+  }),
+
   logout: asyncHandler(async (req: Request, res: Response) => {
     await authService.logout(req.user!.id, req.body?.refreshToken);
     return sendSuccess({

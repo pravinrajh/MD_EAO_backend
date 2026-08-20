@@ -191,6 +191,27 @@ describe("Authentication APIs", () => {
     expect(allowed.body.data.role).toBe("MANAGER");
   });
 
+  it("updates own profile name and phone without changing role", async () => {
+    const registered = await request(app).post("/api/v1/auth/register").send(validUser);
+    const { accessToken } = registered.body.data;
+
+    const updated = await request(app)
+      .patch("/api/v1/auth/me")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: "Priya Updated", phone: "9876500999" });
+
+    expect(updated.status).toBe(200);
+    expect(updated.body.data.name).toBe("Priya Updated");
+    expect(updated.body.data.phone).toBe("9876500999");
+    expect(updated.body.data.role).toBe("EMPLOYEE");
+    expect(updated.body.data.passwordHash).toBeUndefined();
+
+    const me = await request(app)
+      .get("/api/v1/auth/me")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(me.body.data.name).toBe("Priya Updated");
+  });
+
   it("invalidates refresh tokens after logout", async () => {
     const registered = await request(app).post("/api/v1/auth/register").send(validUser);
     const { accessToken, refreshToken } = registered.body.data;

@@ -33,3 +33,13 @@ export const refreshSchema = z.object({
 export const logoutSchema = z.object({
   refreshToken: z.string().min(10).optional(),
 });
+
+/** Self-service profile edit. Role/status cannot be changed here. */
+export const updateProfileSchema = z
+  .object({
+    name: z.string().trim().min(2, "Name is required").max(120).optional(),
+    phone: phoneSchema.optional(),
+  })
+  .refine((value) => value.name !== undefined || value.phone !== undefined, {
+    message: "Provide at least one of name or phone",
+  });

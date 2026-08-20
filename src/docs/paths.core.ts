@@ -142,6 +142,10 @@ const auth: Record<string, PathItem> = {
     get: jwtOp("get", "Authentication", "Current user profile", {
       responses: { "200": item("User"), ...jwtReadErrors },
     }),
+    patch: jwtOp("patch", "Authentication", "Update own profile (name, phone)", {
+      requestBody: jsonBody("UpdateProfileRequest"),
+      responses: { "200": item("User"), ...jwtWriteErrors },
+    }),
   },
   "/api/v1/auth/logout": {
     post: jwtOp("post", "Authentication", "Logout and revoke refresh token", {

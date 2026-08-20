@@ -185,6 +185,11 @@ export const componentSchemas: Record<string, JsonSchema> = {
   RefreshRequest: props({ refreshToken: { type: "string", minLength: 10 } }, ["refreshToken"]),
   LogoutRequest: props({ refreshToken: { type: "string", minLength: 10 } }),
 
+  UpdateProfileRequest: props({
+    name: { type: "string", minLength: 2, maxLength: 120 },
+    phone: { type: "string", example: "9876500801", description: "10-digit Indian mobile number" },
+  }),
+
   CreateUserRequest: props(
     {
       name: { type: "string" },

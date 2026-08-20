@@ -106,6 +106,7 @@ export const EXPRESS_ROUTE_INVENTORY: Array<{ method: string; path: string }> = 
   { method: "POST", path: "/api/v1/auth/login" },
   { method: "POST", path: "/api/v1/auth/refresh" },
   { method: "GET", path: "/api/v1/auth/me" },
+  { method: "PATCH", path: "/api/v1/auth/me" },
   { method: "POST", path: "/api/v1/auth/logout" },
   { method: "GET", path: "/api/v1/users" },
   { method: "POST", path: "/api/v1/users" },

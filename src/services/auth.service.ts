@@ -151,4 +151,21 @@ export const authService = {
     }
     return publicUser(user);
   },
+
+  /** Authenticated user may update only name and phone. */
+  async updateProfile(userId: string, input: { name?: string; phone?: string }) {
+    const existing = await userRepository.findById(userId);
+    if (!existing) {
+      throw new UnauthorizedError("User not found");
+    }
+    const patch: Record<string, unknown> = {};
+    if (input.name !== undefined) patch.name = input.name;
+    if (input.phone !== undefined) patch.phone = input.phone;
+    const updated = await userRepository.updateById(userId, patch);
+    if (!updated) {
+      throw new UnauthorizedError("User not found");
+    }
+    logger.info({ userId }, "Profile updated");
+    return publicUser(updated);
+  },
 };
