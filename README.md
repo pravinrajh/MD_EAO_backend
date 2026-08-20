@@ -48,6 +48,14 @@ npm run create-admin
 
 or `POST /api/v1/users` after an admin exists.
 
+Dummy projects, tasks, and sales (leads / customers / opportunities):
+
+```bash
+npm run seed
+```
+
+Reads `seed/demo.json` and upserts into the development database (`md_ai_office`). Login examples: `md@office.local`, `admin@office.local`, `raj@office.local` — password `SecurePassword123`. Safe to run more than once. Does not touch production or the performance database.
+
 Access tokens live **15 minutes**. Refresh tokens live **7 days**, are stored hashed in MongoDB, and are **revoked on logout** (not client-only).
 
 ```http

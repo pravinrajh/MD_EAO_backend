@@ -17,6 +17,7 @@
     "test:performance": "tsx scripts/run-performance-suite.ts",
     "swagger:validate": "tsx scripts/swagger-validate.ts",
     "create-admin": "tsx scripts/create-admin.ts",
+    "seed": "tsx scripts/seed-demo.ts",
     "seed:performance": "tsx scripts/seed-performance.ts",
     "perf:explain": "tsx scripts/explain-queries.ts",
     "perf:cleanup": "tsx scripts/cleanup-performance.ts"

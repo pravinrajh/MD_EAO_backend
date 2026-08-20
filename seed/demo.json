@@ -1,0 +1,342 @@
+{
+  "password": "SecurePassword123",
+  "users": [
+    {
+      "key": "md",
+      "name": "Priya Sharma",
+      "email": "md@office.local",
+      "phone": "9876543210",
+      "role": "MD"
+    },
+    {
+      "key": "admin",
+      "name": "Karthik Admin",
+      "email": "admin@office.local",
+      "phone": "9876543211",
+      "role": "ADMIN"
+    },
+    {
+      "key": "manager",
+      "name": "Anand Kumar",
+      "email": "anand@office.local",
+      "phone": "9876543212",
+      "role": "MANAGER"
+    },
+    {
+      "key": "raj",
+      "name": "Raj Iyer",
+      "email": "raj@office.local",
+      "phone": "9876543213",
+      "role": "EMPLOYEE"
+    },
+    {
+      "key": "meena",
+      "name": "Meena Krishnan",
+      "email": "meena@office.local",
+      "phone": "9876543214",
+      "role": "EMPLOYEE"
+    }
+  ],
+  "employees": [
+    {
+      "key": "anand",
+      "user": "manager",
+      "employeeId": "SEED-EMP-ANAND",
+      "employeeCode": "EMP-SEED-01",
+      "firstName": "Anand",
+      "lastName": "Kumar",
+      "department": "Operations",
+      "designation": "Project Manager",
+      "location": "Chennai"
+    },
+    {
+      "key": "raj",
+      "user": "raj",
+      "employeeId": "SEED-EMP-RAJ",
+      "employeeCode": "EMP-SEED-02",
+      "firstName": "Raj",
+      "lastName": "Iyer",
+      "department": "Site",
+      "designation": "Site Engineer",
+      "location": "Chennai",
+      "manager": "anand"
+    },
+    {
+      "key": "meena",
+      "user": "meena",
+      "employeeId": "SEED-EMP-MEENA",
+      "employeeCode": "EMP-SEED-03",
+      "firstName": "Meena",
+      "lastName": "Krishnan",
+      "department": "Sales",
+      "designation": "Sales Executive",
+      "location": "Bengaluru",
+      "manager": "anand"
+    }
+  ],
+  "projects": [
+    {
+      "projectId": "PROJ-SEED-001",
+      "code": "CHN-RES",
+      "name": "Chennai Residences",
+      "description": "Gated residential towers in OMR with clubhouse and basement parking.",
+      "location": "Chennai",
+      "projectType": "RESIDENTIAL",
+      "manager": "anand",
+      "members": ["anand", "raj"],
+      "status": "ACTIVE",
+      "progress": 42,
+      "budget": 85000000,
+      "actualExpense": 31200000,
+      "startOffsetDays": -90,
+      "endOffsetDays": 180
+    },
+    {
+      "projectId": "PROJ-SEED-002",
+      "code": "BLR-COM",
+      "name": "Bengaluru Tech Park",
+      "description": "Grade-A commercial campus for two IT tenants.",
+      "location": "Bengaluru",
+      "projectType": "COMMERCIAL",
+      "manager": "anand",
+      "members": ["anand", "meena"],
+      "status": "AT_RISK",
+      "progress": 28,
+      "budget": 120000000,
+      "actualExpense": 54000000,
+      "startOffsetDays": -60,
+      "endOffsetDays": 240
+    },
+    {
+      "projectId": "PROJ-SEED-003",
+      "code": "CBE-INT",
+      "name": "Coimbatore Internal Fit-out",
+      "description": "Office interior for the regional HQ.",
+      "location": "Coimbatore",
+      "projectType": "INTERNAL",
+      "manager": "anand",
+      "members": ["raj", "meena"],
+      "status": "PLANNING",
+      "progress": 10,
+      "budget": 4500000,
+      "actualExpense": 250000,
+      "startOffsetDays": 14,
+      "endOffsetDays": 90
+    }
+  ],
+  "tasks": [
+    {
+      "taskId": "TASK-SEED-001",
+      "title": "Verify Chennai electrical material delivery",
+      "description": "Confirm vendor GRN for panel boards and cables.",
+      "assignee": "raj",
+      "project": "CHN-RES",
+      "priority": "HIGH",
+      "status": "IN_PROGRESS",
+      "dueOffsetDays": 1
+    },
+    {
+      "taskId": "TASK-SEED-002",
+      "title": "Submit OMR soil test report",
+      "description": "Upload lab report to project folder and notify Anand.",
+      "assignee": "raj",
+      "project": "CHN-RES",
+      "priority": "MEDIUM",
+      "status": "PENDING",
+      "dueOffsetDays": 3
+    },
+    {
+      "taskId": "TASK-SEED-003",
+      "title": "Close overdue waterproofing punch list",
+      "description": "Terrace leak points from last monsoon inspection.",
+      "assignee": "raj",
+      "project": "CHN-RES",
+      "priority": "CRITICAL",
+      "status": "PENDING",
+      "dueOffsetDays": -4
+    },
+    {
+      "taskId": "TASK-SEED-004",
+      "title": "Call ABC Industries about facade samples",
+      "description": "Follow up on ACP shade approval.",
+      "assignee": "meena",
+      "project": "BLR-COM",
+      "priority": "HIGH",
+      "status": "PENDING",
+      "dueOffsetDays": 0
+    },
+    {
+      "taskId": "TASK-SEED-005",
+      "title": "Prepare Bengaluru weekly progress deck",
+      "description": "Photos, delay reasons, and catch-up plan for MD review.",
+      "assignee": "anand",
+      "project": "BLR-COM",
+      "priority": "HIGH",
+      "status": "IN_PROGRESS",
+      "dueOffsetDays": 2
+    },
+    {
+      "taskId": "TASK-SEED-006",
+      "title": "Collect Coimbatore furniture quotations",
+      "description": "Three vendor quotes for workstation packages.",
+      "assignee": "meena",
+      "project": "CBE-INT",
+      "priority": "LOW",
+      "status": "PENDING",
+      "dueOffsetDays": 10
+    },
+    {
+      "taskId": "TASK-SEED-007",
+      "title": "Archive completed snag list for Block A",
+      "description": "Mark closed items and store signed PDF.",
+      "assignee": "raj",
+      "project": "CHN-RES",
+      "priority": "MEDIUM",
+      "status": "COMPLETED",
+      "dueOffsetDays": -10
+    }
+  ],
+  "leads": [
+    {
+      "leadId": "LEAD-SEED-001",
+      "name": "Suresh Menon",
+      "companyName": "ABC Industries",
+      "email": "suresh@abc-industries.example",
+      "phone": "9841001001",
+      "source": "WEBSITE",
+      "industry": "Manufacturing",
+      "location": "Chennai",
+      "description": "Interested in a 40,000 sqft warehouse + office.",
+      "assignee": "meena",
+      "status": "CONTACTED",
+      "priority": "HIGH",
+      "estimatedValue": 18000000,
+      "closeOffsetDays": 45,
+      "followUpOffsetDays": 2
+    },
+    {
+      "leadId": "LEAD-SEED-002",
+      "name": "Divya Patel",
+      "companyName": "Nimbus Software",
+      "email": "divya@nimbus.example",
+      "phone": "9841001002",
+      "source": "REFERRAL",
+      "industry": "IT",
+      "location": "Bengaluru",
+      "description": "Looking for two floors in the tech park.",
+      "assignee": "meena",
+      "status": "QUALIFIED",
+      "priority": "HIGH",
+      "estimatedValue": 42000000,
+      "closeOffsetDays": 60,
+      "followUpOffsetDays": 1
+    },
+    {
+      "leadId": "LEAD-SEED-003",
+      "name": "Mohammed Irfan",
+      "companyName": "Coastal Retail LLP",
+      "email": "irfan@coastal.example",
+      "phone": "9841001003",
+      "source": "EVENT",
+      "industry": "Retail",
+      "location": "Coimbatore",
+      "description": "Showroom fit-out enquiry from the trade fair.",
+      "assignee": "anand",
+      "status": "NEW",
+      "priority": "MEDIUM",
+      "estimatedValue": 6500000,
+      "closeOffsetDays": 90,
+      "followUpOffsetDays": 7
+    },
+    {
+      "leadId": "LEAD-SEED-004",
+      "name": "Lakshmi Rao",
+      "companyName": "Harbor Homes",
+      "email": "lakshmi@harborhomes.example",
+      "phone": "9841001004",
+      "source": "PHONE",
+      "industry": "Real Estate",
+      "location": "Chennai",
+      "description": "Converted after site visit at OMR.",
+      "assignee": "meena",
+      "status": "CONVERTED",
+      "priority": "HIGH",
+      "estimatedValue": 24000000,
+      "closeOffsetDays": -5,
+      "followUpOffsetDays": -1
+    }
+  ],
+  "customers": [
+    {
+      "customerId": "CUST-SEED-001",
+      "name": "Lakshmi Rao",
+      "companyName": "Harbor Homes",
+      "email": "lakshmi@harborhomes.example",
+      "phone": "9841001004",
+      "industry": "Real Estate",
+      "location": "Chennai",
+      "address": "12, Cathedral Road, Chennai 600086",
+      "assignee": "meena",
+      "sourceLead": "LEAD-SEED-004",
+      "status": "ACTIVE",
+      "notes": "Signed after OMR site visit. Prefers weekly WhatsApp updates."
+    },
+    {
+      "customerId": "CUST-SEED-002",
+      "name": "Divya Patel",
+      "companyName": "Nimbus Software",
+      "email": "accounts@nimbus.example",
+      "phone": "9841001002",
+      "industry": "IT",
+      "location": "Bengaluru",
+      "address": "Manyata Tech Park, Bengaluru 560045",
+      "assignee": "meena",
+      "sourceLead": "LEAD-SEED-002",
+      "status": "ACTIVE",
+      "notes": "Evaluating two floors. Legal review in progress."
+    }
+  ],
+  "opportunities": [
+    {
+      "opportunityId": "OPP-SEED-001",
+      "title": "Harbor Homes — OMR Block B interiors",
+      "customer": "CUST-SEED-001",
+      "lead": "LEAD-SEED-004",
+      "project": "CHN-RES",
+      "assignee": "meena",
+      "stage": "NEGOTIATION",
+      "probability": 75,
+      "estimatedValue": 24000000,
+      "closeOffsetDays": 20,
+      "followUpOffsetDays": 3,
+      "description": "Interior package for 48 apartments in Block B."
+    },
+    {
+      "opportunityId": "OPP-SEED-002",
+      "title": "Nimbus Software — two floors at tech park",
+      "customer": "CUST-SEED-002",
+      "lead": "LEAD-SEED-002",
+      "project": "BLR-COM",
+      "assignee": "meena",
+      "stage": "PROPOSAL",
+      "probability": 50,
+      "estimatedValue": 42000000,
+      "closeOffsetDays": 40,
+      "followUpOffsetDays": 2,
+      "description": "Fit-out plus 36-month lease facilitation."
+    },
+    {
+      "opportunityId": "OPP-SEED-003",
+      "title": "Harbor Homes — clubhouse furniture",
+      "customer": "CUST-SEED-001",
+      "project": "CHN-RES",
+      "assignee": "anand",
+      "stage": "NEW",
+      "probability": 10,
+      "estimatedValue": 1800000,
+      "closeOffsetDays": 75,
+      "followUpOffsetDays": 10,
+      "description": "Optional add-on after Block B close."
+    }
+  ]
+}
