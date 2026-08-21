@@ -16,6 +16,8 @@ router.post(
   assistantController.queryAssistant,
 );
 
+router.post("/chat", assistantQueryRateLimiter, validate(queryAssistantSchema), assistantController.chat);
+
 router.get("/history", validate(assistantHistoryQuerySchema, "query"), assistantController.getAssistantHistory);
 
 export default router;

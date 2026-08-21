@@ -123,6 +123,9 @@ export function formatAssistantResponse(
     }
     case "PROJECT_STATUS":
       answer = formatProject(data, "status");
+      if (asString(data.manager)) {
+        answer += ` ${asString(data.manager)} is responsible.`;
+      }
       break;
     case "PROJECT_HEALTH":
       if (data.name) {
@@ -207,13 +210,12 @@ export function formatAssistantResponse(
     }
     case "ATTENTION_ITEMS": {
       const items = Array.isArray(data.items) ? (data.items as Array<Record<string, unknown>>) : [];
-      const count = asNumber(data.count);
-      if (count === 0) {
-        answer = "Nothing requires your attention right now.";
+      if (items.length === 0) {
+        answer = "Bottom line: nothing requires your attention from live records today.";
         break;
       }
-      const lines = items.slice(0, 5).map((item, index) => `${index + 1}. ${asString(item.title)}`);
-      answer = `You have ${plural(count, "item")} requiring attention today.\n${lines.join("\n")}`;
+      const lines = items.slice(0, 5).map((item, index) => `${index + 1}. ${asString(item.title, asString(item.type, "Item"))}.`);
+      answer = `Bottom line: ${plural(asNumber(data.count) || items.length, "item")} need attention today.\n${lines.join("\n")}\nRecommended action: start with the first item on this list.`;
       break;
     }
     case "MORNING_REPORT": {
@@ -248,6 +250,112 @@ export function formatAssistantResponse(
     }
     case "MY_WORK_SUMMARY":
       answer = `You have ${plural(asNumber(data.pendingTasks), "pending task")} (${asNumber(data.overdueTasks)} overdue), ${plural(asNumber(data.todayMeetings), "meeting")} today, and ${plural(asNumber(data.followUps), "follow-up")}.`;
+      break;
+    case "EMPLOYEE_DAILY_STATUS": {
+      const name = asString(data.employeeName, "That employee");
+      const overdue = asNumber(data.overdueTasks);
+      const pending = asNumber(data.pendingTasks);
+      const today = asNumber(data.todayTasks);
+      const meetings = asNumber(data.todayMeetings);
+      const projects = Array.isArray(data.projects) ? (data.projects as string[]).filter(Boolean) : [];
+      const bottom =
+        overdue > 0
+          ? `${name} has ${plural(overdue, "overdue task")} that need attention today.`
+          : `${name} has ${plural(pending, "pending task")} and ${plural(meetings, "meeting")} today.`;
+      const projectLine = projects.length ? ` Key work is on ${projects.slice(0, 3).join(", ")}.` : "";
+      answer = `Bottom line: ${bottom} Current status: ${plural(today, "task")} due today, ${pending} pending, ${asNumber(data.completedTasks)} completed in the recent list.${projectLine} Attendance and leave are not in this system. Recommended action: ${overdue > 0 ? `clear ${name}'s overdue work first.` : `review ${name}'s today tasks and meetings.`}`;
+      break;
+    }
+    case "EMPLOYEE_OVERDUE_RANKING": {
+      const employees = Array.isArray(data.employees) ? (data.employees as Array<Record<string, unknown>>) : [];
+      if (employees.length === 0) {
+        answer = "No overdue tasks were found for employees in your scope.";
+        break;
+      }
+      const top = employees[0];
+      const second = employees[1];
+      const follow =
+        second && asNumber(second.overdue) > 0
+          ? `, followed by ${asString(second.employee)} with ${asNumber(second.overdue)}`
+          : "";
+      answer = `${asString(top.employee)} currently has the highest overdue workload with ${asNumber(top.overdue)} tasks${follow}.`;
+      break;
+    }
+    case "EMPLOYEE_WORKLOAD": {
+      const employees = Array.isArray(data.employees) ? (data.employees as Array<Record<string, unknown>>) : [];
+      if (employees.length === 0) {
+        answer = "No employee workload matched that request.";
+        break;
+      }
+      const top = employees[0];
+      answer = `${asString(top.employeeName)} has the highest pending workload with ${asNumber(top.pendingTasks)} pending tasks (${asNumber(top.overdueTasks)} overdue).`;
+      break;
+    }
+    case "DELAYED_PROJECT_WORKLOAD": {
+      const projects = Array.isArray(data.projects) ? (data.projects as Array<Record<string, unknown>>) : [];
+      if (projects.length === 0) {
+        answer = "No delayed projects with matching employee workload were found.";
+        break;
+      }
+      const lines = projects.slice(0, 3).map((project) => {
+        const people = Array.isArray(project.employees)
+          ? (project.employees as Array<Record<string, unknown>>)
+          : [];
+        const lead = people[0];
+        const workload = lead
+          ? ` ${asString(lead.employeeName)} has ${asNumber(lead.pendingTasks)} pending tasks on this project, a high workload concentration.`
+          : "";
+        const spend =
+          asNumber(project.expense) > 0
+            ? ` Spend is ${formatInrCompact(asNumber(project.expense))} of ${formatInrCompact(asNumber(project.budget))}.`
+            : "";
+        return `${asString(project.projectName)} appears affected at ${asNumber(project.progress)}% progress with ${asNumber(project.pendingTasks)} pending and ${asNumber(project.overdueTasks)} overdue tasks.${spend}${workload}`;
+      });
+      answer = lines.join(" ");
+      break;
+    }
+    case "DYNAMIC_QUERY": {
+      const projects = Array.isArray(data.projects) ? (data.projects as Array<Record<string, unknown>>) : [];
+      const tasks = Array.isArray(data.tasks) ? (data.tasks as Array<Record<string, unknown>>) : [];
+      const employees = Array.isArray(data.employees) ? (data.employees as Array<Record<string, unknown>>) : [];
+      if (employees.length > 0) {
+        const top = employees[0];
+        answer = `${asString(top.employee || top.employeeName)} has ${asNumber(top.overdueTasks || top.count)} matching tasks (${asNumber(top.pendingTasks)} pending).`;
+        break;
+      }
+      if (typeof data.count === "number" && projects.length > 0) {
+        const names = projects
+          .slice(0, 5)
+          .map((item) => asString(item.projectName || item.name))
+          .filter(Boolean);
+        const status = asString(projects[0]?.status);
+        answer = names.length
+          ? `I found ${asNumber(data.count)} matching ${plural(asNumber(data.count), "project")}: ${names.join(", ")}${status ? ` (${status})` : ""}.`
+          : `I found ${asNumber(data.count)} matching projects.`;
+        break;
+      }
+      if (typeof data.count === "number" && tasks.length > 0) {
+        answer = `I found ${plural(asNumber(data.count), "matching task")}. Showing ${tasks.length}.`;
+        break;
+      }
+      if (typeof data.pendingTasks === "number" || typeof data.overdueTasks === "number") {
+        answer = `There are ${asNumber(data.pendingTasks)} pending tasks and ${asNumber(data.overdueTasks)} overdue tasks.`;
+        break;
+      }
+      if (data.dashboard) {
+        answer = "Here is the current business snapshot from live records.";
+        break;
+      }
+      if (typeof data.count === "number") {
+        answer = `I found ${asNumber(data.count)} matching records.`;
+        break;
+      }
+      answer = "No matching business data was found for that question.";
+      break;
+    }
+    case "SMALLTALK":
+      answer =
+        "Hi! I'm your office assistant. Ask me about projects, tasks, people, meetings, or sales.";
       break;
     case "UNSUPPORTED":
     default:

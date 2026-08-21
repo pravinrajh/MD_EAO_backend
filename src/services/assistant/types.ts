@@ -12,6 +12,7 @@ export type AssistantSource = {
 
 export type ExtractedEntities = {
   projectName?: string;
+  projectId?: string;
   employeeName?: string;
   customerName?: string;
   leadName?: string;
@@ -19,6 +20,7 @@ export type ExtractedEntities = {
   dateRange?: "TODAY" | "CURRENT_WEEK" | "CURRENT_MONTH";
   priority?: string;
   status?: string;
+  minPending?: number;
 };
 
 export type ResolvedEntities = ExtractedEntities & {
@@ -69,6 +71,7 @@ export type AssistantQueryResult = {
   data: Record<string, unknown>;
   sources: AssistantSource[];
   confidence: number;
+  toolsUsed?: string[];
 };
 
 export type StoredQueryStatus = AssistantQueryStatus;

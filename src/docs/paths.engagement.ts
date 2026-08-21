@@ -72,6 +72,42 @@ const assistant: Record<string, PathItem> = {
       },
     }),
   },
+  "/api/v1/assistant/chat": {
+    post: jwtOp("Assistant Query", "Chatbot message (query or action)", {
+      description:
+        "Single chatbot endpoint for the MD UI. Classifies the message as a read query or a write action, then runs the existing orchestrator. Echo conversationId on follow-ups. Optional Idempotency-Key applies to actions.",
+      parameters: [
+        {
+          name: "Idempotency-Key",
+          in: "header",
+          required: false,
+          schema: { type: "string", maxLength: 128 },
+        },
+      ],
+      requestBody: jsonBody("AssistantQueryRequest", {
+        message: "What projects are going?",
+        conversationId: "CHAT-001",
+      }),
+      responses: {
+        "200": item("AssistantChatResponse", {
+          example: {
+            success: true,
+            message: "Chat processed successfully",
+            data: {
+              conversationId: "CHAT-001",
+              mode: "QUERY",
+              reply: "Chennai Project is ACTIVE at 62% progress.",
+              intent: "DYNAMIC_QUERY",
+              status: "SUCCESS",
+              requiresConfirmation: false,
+              data: {},
+            },
+          },
+        }),
+        ...jwtWriteErrors,
+      },
+    }),
+  },
   "/api/v1/assistant/history": {
     get: jwtOp("Assistant Query", "Query history for current user", {
       parameters: [
@@ -136,6 +172,65 @@ const assistant: Record<string, PathItem> = {
         { name: "conversationId", in: "query", schema: { type: "string", maxLength: 100 } },
       ],
       responses: { "200": list("AssistantActionHistoryItem"), ...jwtReadErrors },
+    }),
+  },
+};
+
+const ai: Record<string, PathItem> = {
+  "/api/v1/ai/query": {
+    post: jwtOp("AI", "Natural language query alias", {
+      description:
+        "Alias of POST /api/v1/assistant/query. Same JWT, validation, rate limit, and orchestrator. Gemini is used only as the model provider when configured; rule-based routing remains the fallback.",
+      requestBody: jsonBody("AssistantQueryRequest", {
+        message: "What are my pending tasks?",
+        conversationId: "CONV-001",
+      }),
+      responses: {
+        "200": item("AssistantQueryResponse"),
+        ...jwtWriteErrors,
+      },
+    }),
+  },
+  "/api/v1/ai/action": {
+    post: jwtOp("AI", "Natural language action alias", {
+      description:
+        "Alias of POST /api/v1/assistant/action. Optional Idempotency-Key. Gemini never accesses MongoDB or bypasses RBAC.",
+      parameters: [
+        {
+          name: "Idempotency-Key",
+          in: "header",
+          required: false,
+          schema: { type: "string", maxLength: 128 },
+        },
+      ],
+      requestBody: jsonBody("AssistantActionRequest", {
+        message: "Create a task called Electrical Verification and assign it to Raju.",
+      }),
+      responses: {
+        "200": item("AssistantActionResponse"),
+        ...jwtWriteErrors,
+      },
+    }),
+  },
+  "/api/v1/ai/chat": {
+    post: jwtOp("AI", "Chatbot alias", {
+      description: "Alias of POST /api/v1/assistant/chat. Same JWT, validation, rate limit, and orchestrator.",
+      parameters: [
+        {
+          name: "Idempotency-Key",
+          in: "header",
+          required: false,
+          schema: { type: "string", maxLength: 128 },
+        },
+      ],
+      requestBody: jsonBody("AssistantQueryRequest", {
+        message: "What projects are going?",
+        conversationId: "CHAT-001",
+      }),
+      responses: {
+        "200": item("AssistantChatResponse"),
+        ...jwtWriteErrors,
+      },
     }),
   },
 };
@@ -337,4 +432,4 @@ const whatsapp: Record<string, PathItem> = {
   },
 };
 
-export const engagementPaths = { ...assistant, ...reminders, ...notifications, ...whatsapp };
+export const engagementPaths = { ...assistant, ...ai, ...reminders, ...notifications, ...whatsapp };

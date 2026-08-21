@@ -19,6 +19,12 @@ const SPELLING: Array<[RegExp, string]> = [
   [/\bpipelines?\b/g, "pipeline"],
   [/\boppertunit/g, "opportunit"],
   [/\battension\b/g, "attention"],
+  [/\bstaus\b/g, "status"],
+  [/\bstauts\b/g, "status"],
+  [/\btomrw\b/g, "tomorrow"],
+  [/\btommorow\b/g, "tomorrow"],
+  [/\bchenai\b/g, "chennai"],
+  [/\bcollecton\b/g, "collection"],
 ];
 
 const NAME_STOPWORDS = new Set([
@@ -56,6 +62,44 @@ const NAME_STOPWORDS = new Set([
   "about",
   "of",
   "what",
+  "which",
+  "who",
+  "whom",
+  "whose",
+  "where",
+  "when",
+  "why",
+  "delayed",
+  "assigned",
+  "employee",
+  "employees",
+  "task",
+  "tasks",
+  "most",
+  "highest",
+  "because",
+  "many",
+  "too",
+  "workload",
+  "overloaded",
+  "working",
+  "and",
+  "or",
+  "with",
+  "from",
+  "into",
+  "by",
+  "in",
+  "at",
+  "inside",
+  "affected",
+  "enna",
+  "entha",
+  "ethu",
+  "epdi",
+  "panna",
+  "working",
+  "work",
 ]);
 
 function captureOriginalCasing(message: string, matched: string): string {
@@ -64,10 +108,14 @@ function captureOriginalCasing(message: string, matched: string): string {
   return found?.[0]?.trim() || matched.trim();
 }
 
-function extractProjectName(original: string): string | undefined {
-  const match = original.match(/\b([A-Za-z][A-Za-z0-9 &.'-]{0,60}?)\s+projects?\b/i);
-  if (!match?.[1]) return undefined;
-  const words = match[1]
+function extractProjectName(original: string, normalized: string): string | undefined {
+  if (/\b(which|what|who|entha|enna)\b/.test(normalized) && /\b(work|working|panna|assigned)\b/.test(normalized)) {
+    return undefined;
+  }
+  const matches = [...original.matchAll(/\b([A-Za-z][A-Za-z0-9 &.'-]{0,40}?)\s+projects?\b/gi)];
+  const last = matches.at(-1)?.[1];
+  if (!last) return undefined;
+  const words = last
     .trim()
     .split(/\s+/)
     .filter((word) => !NAME_STOPWORDS.has(word.toLowerCase()));
@@ -105,12 +153,71 @@ function usableName(value: string | undefined): string | undefined {
 export function extractEntities(original: string, normalized: string): ExtractedEntities {
   const entities: ExtractedEntities = {};
 
-  const projectName = extractProjectName(original);
+  const projectName = extractProjectName(original, normalized);
   if (projectName) entities.projectName = captureOriginalCasing(original, projectName);
+
+  const personAtStart = original.match(
+    /^([A-Za-z][A-Za-z.'-]{1,40}(?:\s+[A-Za-z][A-Za-z.'-]{1,40})?)(?:\s+(?:ku|kku))?\b/,
+  );
+  const startName = usableName(personAtStart?.[1]);
+  const startParts = startName?.split(/\s+/) ?? [];
+  const startFirst = (startParts[0] || "").toLowerCase().replace(/['’]s$/, "").replace(/['’]/g, "");
+  const startSecond = startParts[1]?.toLowerCase() || "";
+  const trailingCue = new Set(["status", "staus", "today", "handling", "doing", "work", "enna", "panraru"]);
+  const notPerson = new Set([
+    "what",
+    "whats",
+    "which",
+    "who",
+    "show",
+    "list",
+    "how",
+    "give",
+    "create",
+    "assign",
+    "update",
+    "schedule",
+    "cancel",
+    "mark",
+    "complete",
+    "please",
+    "is",
+    "are",
+    "was",
+    "were",
+    "do",
+    "does",
+    "did",
+    "can",
+    "could",
+    "run",
+    "call",
+    "the",
+    "this",
+    "that",
+    "our",
+    "my",
+  ]);
+  if (
+    startName &&
+    !notPerson.has(startFirst) &&
+    !["project", "projects", "task", "tasks", "meeting", "meetings"].includes(startSecond)
+  ) {
+    const person =
+      startSecond && (NAME_STOPWORDS.has(startSecond) || trailingCue.has(startSecond))
+        ? usableName(startParts[0])
+        : startName;
+    if (person) entities.employeeName = captureOriginalCasing(original, person);
+  }
 
   const employeeMatch =
     original.match(/\b([A-Za-z][A-Za-z.'-]{1,40}?)(?:'s|’s)\s+(?:overdue\s+|pending\s+|today(?:'s)?\s+)?tasks?\b/i) ||
-    original.match(/\b(?:show|list)\s+([A-Za-z][A-Za-z.'-]{1,40}?)\s+(?:overdue\s+|pending\s+|today(?:'s)?\s+)?tasks?\b/i);
+    original.match(/\b(?:show|list)\s+([A-Za-z][A-Za-z.'-]{1,40}?)\s+(?:overdue\s+|pending\s+|today(?:'s)?\s+)?tasks?\b/i) ||
+    original.match(/\b([A-Za-z][A-Za-z.'-]{1,40}?)(?:'s|’s)\s+(?:status|staus|work)\b/i) ||
+    original.match(/\b(?:how is|what is|whats|what's|show me)\s+([A-Za-z][A-Za-z.'-]{1,40}?)(?:'s|’s)?\s+(?:status|staus|work|doing|handling)/i) ||
+    original.match(/\b(?:what'?s)\s+([A-Za-z][A-Za-z.'-]{1,40}?)\s+(?:handling|doing|status)/i) ||
+    original.match(/^([A-Za-z][A-Za-z.'-]{1,40})(?:\s+enna|\s+today|\s+status|\s+staus)\b/i) ||
+    original.match(/\b(?:how is|what is)\s+([A-Za-z][A-Za-z.'-]{1,40})\s+today\b/i);
   const employeeName = usableName(employeeMatch?.[1]);
   if (employeeName && !["project", "company", "all", "my"].includes(employeeName.toLowerCase())) {
     entities.employeeName = captureOriginalCasing(original, employeeName);
@@ -124,6 +231,14 @@ export function extractEntities(original: string, normalized: string): Extracted
   if (leadMatch?.[1]) {
     const name = usableName(leadMatch[1]);
     if (name) entities.leadName = captureOriginalCasing(original, name);
+  }
+
+  const minPendingMatch = normalized.match(/\b(?:more than|over|at least)\s+(\d{1,4})\b/);
+  if (minPendingMatch) {
+    const value = Number(minPendingMatch[1]);
+    if (Number.isFinite(value) && value > 0) entities.minPending = value;
+  } else if (/\boverloaded\b/.test(normalized)) {
+    entities.minPending = 10;
   }
 
   const opportunityMatch = original.match(/\bopportunity\s+([A-Za-z0-9][A-Za-z0-9 &.'-]{1,40})/i);
@@ -152,6 +267,72 @@ export function extractEntities(original: string, normalized: string): Extracted
   return entities;
 }
 
+function editDistance(a: string, b: string): number {
+  const left = a.toLowerCase();
+  const right = b.toLowerCase();
+  const rows = left.length + 1;
+  const cols = right.length + 1;
+  const grid: number[][] = Array.from({ length: rows }, () => Array(cols).fill(0));
+  for (let i = 0; i < rows; i += 1) grid[i][0] = i;
+  for (let j = 0; j < cols; j += 1) grid[0][j] = j;
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      grid[i][j] = Math.min(grid[i - 1][j] + 1, grid[i][j - 1] + 1, grid[i - 1][j - 1] + cost);
+    }
+  }
+  return grid[left.length][right.length];
+}
+
+function nameMatchScore(query: string, candidate: string): number {
+  const q = query.trim().toLowerCase();
+  const c = candidate.trim().toLowerCase();
+  if (!q || !c) return 0;
+  if (c === q || c.includes(q) || q.includes(c)) return 1;
+  const qFirst = q.split(/\s+/)[0] || "";
+  const cFirst = c.split(/\s+/)[0] || "";
+  if (!qFirst || !cFirst) return 0;
+  const dist = editDistance(qFirst, cFirst);
+  const maxLen = Math.max(qFirst.length, cFirst.length);
+  if (maxLen < 4) return 0;
+  const ratio = 1 - dist / maxLen;
+  return ratio >= 0.7 ? ratio : 0;
+}
+
+async function lookupEmployees(name: string): Promise<Array<Record<string, unknown>>> {
+  const searchOnce = async (search: string) => {
+    const result = await employeeService.list({
+      search,
+      status: "ACTIVE",
+      limit: 8,
+      page: 1,
+      sortBy: "firstName",
+      sortOrder: "asc",
+    });
+    return result.items as Array<Record<string, unknown>>;
+  };
+  const direct = await searchOnce(name);
+  if (direct.length) return direct;
+  const first = name.trim().split(/\s+/)[0];
+  if (first && first !== name) {
+    const byFirst = await searchOnce(first);
+    if (byFirst.length) return byFirst;
+  }
+  const pool = await employeeService.list({
+    status: "ACTIVE",
+    limit: 50,
+    page: 1,
+    sortBy: "firstName",
+    sortOrder: "asc",
+  });
+  return (pool.items as Array<Record<string, unknown>>)
+    .map((item) => ({ item, score: nameMatchScore(name, displayName(item, ["displayName", "firstName"])) }))
+    .filter((row) => row.score >= 0.72)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map((row) => row.item);
+}
+
 function displayName(item: Record<string, unknown>, fallbacks: string[]): string {
   for (const key of fallbacks) {
     const value = item[key];
@@ -168,7 +349,9 @@ export async function resolveEntities(
   const resolved: ResolvedEntities = { ...extracted };
   const lookups: Array<Promise<void>> = [];
 
-  if (extracted.projectName || options.requireProject) {
+  if (extracted.projectId && !extracted.projectName) {
+    // Conversation already resolved the project.
+  } else if (extracted.projectName || options.requireProject) {
     lookups.push(
       (async () => {
         const search = extracted.projectName ?? "";
@@ -219,18 +402,18 @@ export async function resolveEntities(
     );
   }
 
+  if (options.requireEmployee && !extracted.employeeName) {
+    resolved.clarification = {
+      field: "employee",
+      question: "Which employee should I check?",
+      options: [],
+    };
+  }
+
   if (extracted.employeeName) {
     lookups.push(
       (async () => {
-        const result = await employeeService.list({
-          search: extracted.employeeName,
-          status: "ACTIVE",
-          limit: 5,
-          page: 1,
-          sortBy: "firstName",
-          sortOrder: "asc",
-        });
-        const items = result.items as Array<Record<string, unknown>>;
+        const items = await lookupEmployees(extracted.employeeName as string);
         if (items.length === 0) {
           resolved.notFound = { field: "employee", name: extracted.employeeName as string };
           return;
@@ -238,7 +421,7 @@ export async function resolveEntities(
         if (items.length > 1) {
           resolved.clarification = {
             field: "employee",
-            question: `I found ${items.length} employees matching ${extracted.employeeName}. Which one do you mean?`,
+            question: `I found multiple employees named ${extracted.employeeName}. Please select the correct employee.`,
             options: items.map((item) => ({
               id: String(item.id),
               name: displayName(item, ["displayName", "firstName"]),

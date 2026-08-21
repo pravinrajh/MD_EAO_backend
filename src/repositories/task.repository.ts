@@ -239,4 +239,88 @@ export const taskRepository = {
 
   toPublic: toPublicTask,
   buildFilter,
+
+  async workloadByAssignee(
+    filters: {
+      scope?: FilterQuery<TaskDocument>;
+      projectId?: string;
+      assignedTo?: string;
+      overdueOnly?: boolean;
+      projectIds?: string[];
+      groupBy?: Array<"employee" | "project">;
+      limit: number;
+    },
+    now = new Date(),
+  ) {
+    const match = buildFilter(
+      {
+        scope: filters.scope,
+        projectId: filters.projectId,
+        assignedTo: filters.assignedTo,
+        overdue: filters.overdueOnly,
+        skip: 0,
+        limit: 1,
+        sortBy: "dueDate",
+        sortOrder: "asc",
+      },
+      now,
+    );
+    if (filters.projectIds && filters.projectIds.length > 0) {
+      match.projectId = {
+        $in: filters.projectIds.map((id) => new mongoose.Types.ObjectId(id)),
+      };
+    } else if (typeof match.projectId === "string") {
+      match.projectId = new mongoose.Types.ObjectId(match.projectId);
+    }
+    if (typeof match.assignedTo === "string") {
+      match.assignedTo = new mongoose.Types.ObjectId(match.assignedTo);
+    }
+
+    const groupBy = filters.groupBy ?? ["employee", "project"];
+    const groupId: Record<string, string> = {};
+    if (groupBy.includes("employee")) groupId.employeeId = "$assignedTo";
+    if (groupBy.includes("project")) groupId.projectId = "$projectId";
+    if (Object.keys(groupId).length === 0) groupId.employeeId = "$assignedTo";
+
+    const rows = await Task.aggregate<Record<string, unknown>>([
+      { $match: match },
+      {
+        $group: {
+          _id: groupId,
+          pending: {
+            $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
+          },
+          overdue: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $in: ["$status", OPEN_TASK_STATUSES] },
+                    { $ne: ["$dueDate", null] },
+                    { $lt: ["$dueDate", now] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { overdue: -1, pending: -1, count: -1 } },
+      { $limit: Math.min(Math.max(filters.limit, 1), 100) },
+    ]);
+
+    return rows.map((row) => {
+      const id = row._id && typeof row._id === "object" ? (row._id as Record<string, unknown>) : {};
+      return {
+        employeeId: id.employeeId ? String(id.employeeId) : "",
+        projectId: id.projectId ? String(id.projectId) : null,
+        pending: Number(row.pending ?? 0),
+        overdue: Number(row.overdue ?? 0),
+        count: Number(row.count ?? 0),
+      };
+    });
+  },
 };

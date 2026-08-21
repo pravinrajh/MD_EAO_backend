@@ -197,6 +197,33 @@ export const BUDGET_SAFE_FIELDS =
 
 export const DEFAULT_CURRENCY: FinanceCurrency = "INR";
 
+export const INVOICE_STATUSES = ["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"] as const;
+export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
+
+export const INVOICE_SAFE_FIELDS =
+  "invoiceId invoiceNumber customerId projectId amount paidAmount balance dueDate issueDate status description createdBy isDeleted deletedAt deletedBy createdAt updatedAt";
+
+export const INVOICE_PAYMENT_SAFE_FIELDS =
+  "paymentId invoiceId amount paidAt paymentMethod notes createdBy createdAt updatedAt";
+
+export const VENDOR_STATUSES = ["ACTIVE", "INACTIVE"] as const;
+export type VendorStatus = (typeof VENDOR_STATUSES)[number];
+
+export const VENDOR_SAFE_FIELDS =
+  "vendorId name phone email location taxIdentifier status notes createdBy isDeleted deletedAt deletedBy createdAt updatedAt";
+
+export const LAND_PARCEL_STATUSES = ["AVAILABLE", "NEGOTIATION", "LEGAL_VERIFICATION", "ACQUIRED", "DROPPED"] as const;
+export type LandParcelStatus = (typeof LAND_PARCEL_STATUSES)[number];
+
+export const LAND_PARCEL_SAFE_FIELDS =
+  "parcelId name location areaNote ownerName askingPrice status projectId notes createdBy isDeleted deletedAt deletedBy createdAt updatedAt";
+
+export const MD_NOTE_RELATED_TYPES = ["PROJECT", "CUSTOMER", "EMPLOYEE", "TASK", "MEETING", "NONE"] as const;
+export type MdNoteRelatedType = (typeof MD_NOTE_RELATED_TYPES)[number];
+
+export const MD_NOTE_SAFE_FIELDS =
+  "noteId body relatedType relatedId createdBy isDeleted deletedAt deletedBy createdAt updatedAt";
+
 export const PAGINATION = {
   defaultPage: 1,
   defaultLimit: 20,
@@ -244,6 +271,16 @@ export const ASSISTANT_INTENTS = [
   "MORNING_REPORT",
   "COMPANY_SUMMARY",
   "MY_WORK_SUMMARY",
+  "EMPLOYEE_OVERDUE_RANKING",
+  "EMPLOYEE_WORKLOAD",
+  "DELAYED_PROJECT_WORKLOAD",
+  "EMPLOYEE_DAILY_STATUS",
+  "INVOICE_SUMMARY",
+  "VENDOR_LIST",
+  "LAND_PARCEL_LIST",
+  "MD_NOTES",
+  "DYNAMIC_QUERY",
+  "SMALLTALK",
   "UNSUPPORTED",
 ] as const;
 export type AssistantIntent = (typeof ASSISTANT_INTENTS)[number];
@@ -256,8 +293,9 @@ export const ASSISTANT_SAFE_FIELDS =
 
 export const ASSISTANT_LIST_LIMIT = 10;
 export const ASSISTANT_LIST_MAX = 20;
-export const ASSISTANT_QUERY_TIMEOUT_MS = 8000;
+export const ASSISTANT_QUERY_TIMEOUT_MS = 20000;
 export const ASSISTANT_MESSAGE_MAX = 2000;
+export const ASSISTANT_QUERY_PLAN_MAX_LIMIT = 100;
 
 export const ASSISTANT_ACTION_INTENTS = [
   "CREATE_TASK",
@@ -276,6 +314,16 @@ export const ASSISTANT_ACTION_INTENTS = [
   "CREATE_CUSTOMER",
   "UPDATE_CUSTOMER",
   "CREATE_REMINDER",
+  "DELETE_TASK",
+  "CREATE_INVOICE",
+  "UPDATE_INVOICE",
+  "RECORD_INVOICE_PAYMENT",
+  "CREATE_VENDOR",
+  "UPDATE_VENDOR",
+  "CREATE_LAND_PARCEL",
+  "UPDATE_LAND_PARCEL",
+  "CREATE_MD_NOTE",
+  "UPDATE_MD_NOTE",
   "UNSUPPORTED",
 ] as const;
 export type AssistantActionIntent = (typeof ASSISTANT_ACTION_INTENTS)[number];

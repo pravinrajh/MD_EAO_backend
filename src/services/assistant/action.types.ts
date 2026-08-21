@@ -29,6 +29,12 @@ export type ExtractedActionEntities = {
   budget?: number;
   location?: string;
   stage?: string;
+  taskId?: string;
+  invoiceNumber?: string;
+  vendorName?: string;
+  parcelName?: string;
+  noteBody?: string;
+  amount?: number;
 };
 
 export type ResolvedActionEntities = ExtractedActionEntities & {
@@ -40,6 +46,10 @@ export type ResolvedActionEntities = ExtractedActionEntities & {
   customerId?: string;
   leadId?: string;
   opportunityId?: string;
+  invoiceId?: string;
+  vendorId?: string;
+  parcelId?: string;
+  noteId?: string;
   participantIds?: string[];
   dueDate?: Date;
   startTime?: Date;

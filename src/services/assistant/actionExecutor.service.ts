@@ -8,7 +8,10 @@ import { meetingService } from "../meeting.service";
 import { opportunityService } from "../opportunity.service";
 import { projectService } from "../project.service";
 import { reminderService } from "../reminder/reminder.service";
-import { taskService } from "../task.service";
+import { invoiceService } from "../invoice.service";
+import { vendorService } from "../vendor.service";
+import { landParcelService } from "../landParcel.service";
+import { mdNoteService } from "../mdNote.service";
 import { addMinutes, combineDateAndTime, parseNaturalTime } from "./dateParser";
 import type { ActionActor, ActionDto, ResolvedActionEntities } from "./action.types";
 
@@ -91,13 +94,27 @@ async function createTask(actor: ActionActor, entities: ResolvedActionEntities) 
         description: entities.description,
         assignedTo,
         projectId: entities.projectId ?? null,
+        customerId: entities.customerId ?? null,
         priority: (entities.priority as TaskPriority) ?? "MEDIUM",
         dueDate: entities.dueDate,
       },
       actor,
     ),
   );
-  return { message: "Task created successfully.", result: pickTask(created) };
+  const taskId = String(created.id ?? "");
+  const assigned =
+    entities.assigneeId && taskId
+      ? asRecord(await taskService.assign(taskId, entities.assigneeId, actor))
+      : created;
+  const title = String(assigned.title ?? created.title ?? entities.title);
+  const who = (entities.employeeName ?? "").split(/\s+/)[0];
+  if (who) {
+    return {
+      message: `Task '${title}' was created and assigned to ${who} successfully.`,
+      result: pickTask(assigned),
+    };
+  }
+  return { message: "Task created successfully.", result: pickTask(assigned) };
 }
 
 async function updateTask(actor: ActionActor, entities: ResolvedActionEntities) {
@@ -116,8 +133,13 @@ async function updateTask(actor: ActionActor, entities: ResolvedActionEntities) 
   if (entities.dueDate) dto.dueDate = entities.dueDate;
   if (entities.assigneeId) dto.assignedTo = entities.assigneeId;
   if (entities.projectId) dto.projectId = entities.projectId;
-  if (Object.keys(dto).length === 0) throw new Error("CLARIFICATION:What should I change on this task?");
-  const updated = asRecord(await taskService.update(entities.taskId, dto, actor));
+  if (Object.keys(dto).length === 0 && !entities.status) throw new Error("CLARIFICATION:What should I change on this task?");
+  let updated = asRecord(await taskService.update(entities.taskId, dto, actor));
+  if (entities.status && ["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"].includes(entities.status)) {
+    updated = asRecord(
+      await taskService.updateStatus(entities.taskId, { status: entities.status as TaskStatus }, actor),
+    );
+  }
   return { message: "Task updated successfully.", result: pickTask(updated) };
 }
 
@@ -141,6 +163,12 @@ async function completeTask(actor: ActionActor, entities: ResolvedActionEntities
     await taskService.updateStatus(entities.taskId, { status: "COMPLETED" as TaskStatus }, actor),
   );
   return { message: "Task marked as completed.", result: pickTask(updated) };
+}
+
+async function deleteTask(actor: ActionActor, entities: ResolvedActionEntities) {
+  if (!entities.taskId) throw new Error("CLARIFICATION:Which task should I delete?");
+  const removed = asRecord(await taskService.remove(entities.taskId, actor));
+  return { message: "Task deleted successfully.", result: pickTask(removed) };
 }
 
 async function createMeeting(actor: ActionActor, entities: ResolvedActionEntities) {
@@ -374,6 +402,102 @@ async function createReminder(actor: ActionActor, entities: ResolvedActionEntiti
   return { message: "Reminder created successfully.", result: pickReminder(created) };
 }
 
+async function createInvoice(actor: ActionActor, entities: ResolvedActionEntities) {
+  if (!entities.customerId) throw new Error("CLARIFICATION:Which customer is this invoice for?");
+  if (!entities.amount) throw new Error("CLARIFICATION:What amount should I put on the invoice?");
+  const created = asRecord(
+    await invoiceService.create(
+      {
+        customerId: entities.customerId,
+        projectId: entities.projectId ?? null,
+        amount: entities.amount,
+        dueDate: entities.dueDate,
+        description: entities.description || entities.title,
+      },
+      actor,
+    ),
+  );
+  return { message: `Invoice ${created.invoiceNumber ?? ""} was created.`, result: created };
+}
+
+async function updateInvoice(actor: ActionActor, entities: ResolvedActionEntities) {
+  if (!entities.invoiceId) throw new Error("CLARIFICATION:Which invoice should I update?");
+  const updated = asRecord(
+    await invoiceService.update(entities.invoiceId, { description: entities.description, status: entities.status === "CANCELLED" ? "CANCELLED" : undefined }, actor),
+  );
+  return { message: "Invoice updated successfully.", result: updated };
+}
+
+async function recordInvoicePayment(actor: ActionActor, entities: ResolvedActionEntities) {
+  if (!entities.invoiceId) throw new Error("CLARIFICATION:Which invoice should I record a payment against?");
+  if (!entities.amount) throw new Error("CLARIFICATION:What amount was paid?");
+  const updated = asRecord(await invoiceService.recordPayment(entities.invoiceId, { amount: entities.amount }, actor));
+  return { message: "Payment recorded on the invoice. Cash was not posted to finance accounts.", result: updated };
+}
+
+async function createVendor(actor: ActionActor, entities: ResolvedActionEntities) {
+  const name = entities.vendorName || entities.title;
+  if (!name) throw new Error("CLARIFICATION:What is the vendor name?");
+  const created = asRecord(await vendorService.create({ name, location: entities.location }, actor));
+  return { message: `Vendor '${name}' was created.`, result: created };
+}
+
+async function updateVendor(actor: ActionActor, entities: ResolvedActionEntities) {
+  if (!entities.vendorId) throw new Error("CLARIFICATION:Which vendor should I update?");
+  const updated = asRecord(
+    await vendorService.update(entities.vendorId, { name: entities.vendorName, location: entities.location, status: entities.status as "ACTIVE" | "INACTIVE" | undefined }, actor),
+  );
+  return { message: "Vendor updated successfully.", result: updated };
+}
+
+async function createLandParcel(actor: ActionActor, entities: ResolvedActionEntities) {
+  const name = entities.parcelName || entities.title || entities.location;
+  if (!name) throw new Error("CLARIFICATION:What should I name the land parcel?");
+  const created = asRecord(
+    await landParcelService.create(
+      {
+        name: name.slice(0, 160),
+        location: entities.location || entities.parcelName,
+        projectId: entities.projectId ?? null,
+        askingPrice: entities.amount,
+      },
+      actor,
+    ),
+  );
+  return { message: `Land parcel '${name}' was created.`, result: created };
+}
+
+async function updateLandParcel(actor: ActionActor, entities: ResolvedActionEntities) {
+  if (!entities.parcelId) throw new Error("CLARIFICATION:Which land parcel should I update?");
+  const status = entities.status as "AVAILABLE" | "NEGOTIATION" | "LEGAL_VERIFICATION" | "ACQUIRED" | "DROPPED" | undefined;
+  const mapped =
+    status && ["AVAILABLE", "NEGOTIATION", "LEGAL_VERIFICATION", "ACQUIRED", "DROPPED"].includes(status)
+      ? status
+      : /\blegal\b/.test(String(entities.title ?? "").toLowerCase())
+        ? "LEGAL_VERIFICATION"
+        : undefined;
+  const updated = asRecord(
+    await landParcelService.update(entities.parcelId, { status: mapped, location: entities.location, name: entities.parcelName }, actor),
+  );
+  return { message: "Land parcel updated successfully.", result: updated };
+}
+
+async function createMdNote(actor: ActionActor, entities: ResolvedActionEntities) {
+  const body = entities.noteBody || entities.title || entities.description;
+  if (!body) throw new Error("CLARIFICATION:What should the note say?");
+  const relatedType = entities.projectId ? "PROJECT" : entities.customerId ? "CUSTOMER" : entities.employeeId ? "EMPLOYEE" : "NONE";
+  const relatedId = entities.projectId || entities.customerId || entities.employeeId || null;
+  const created = asRecord(await mdNoteService.create({ body, relatedType, relatedId }, actor));
+  return { message: "MD note saved.", result: created };
+}
+
+async function updateMdNote(actor: ActionActor, entities: ResolvedActionEntities) {
+  if (!entities.noteId) throw new Error("CLARIFICATION:Which note should I update?");
+  const body = entities.noteBody || entities.title || entities.description;
+  const updated = asRecord(await mdNoteService.update(entities.noteId, { body }, actor));
+  return { message: "Note updated successfully.", result: updated };
+}
+
 const EXECUTORS: Record<
   Exclude<AssistantActionIntent, "UNSUPPORTED">,
   (actor: ActionActor, entities: ResolvedActionEntities) => Promise<{ message: string; result: ActionDto }>
@@ -394,13 +518,28 @@ const EXECUTORS: Record<
   CREATE_CUSTOMER: createCustomer,
   UPDATE_CUSTOMER: updateCustomer,
   CREATE_REMINDER: createReminder,
+  DELETE_TASK: deleteTask,
+  CREATE_INVOICE: createInvoice,
+  UPDATE_INVOICE: updateInvoice,
+  RECORD_INVOICE_PAYMENT: recordInvoicePayment,
+  CREATE_VENDOR: createVendor,
+  UPDATE_VENDOR: updateVendor,
+  CREATE_LAND_PARCEL: createLandParcel,
+  UPDATE_LAND_PARCEL: updateLandParcel,
+  CREATE_MD_NOTE: createMdNote,
+  UPDATE_MD_NOTE: updateMdNote,
 };
 
 export function confirmationFor(
   intent: AssistantActionIntent,
   entities: ResolvedActionEntities,
 ): { required: boolean; message?: string } {
-  if (intent === "CANCEL_MEETING") {
+  if (intent === "DELETE_TASK") {
+    return {
+      required: true,
+      message: `Do you want me to delete ${entities.taskTitle ?? "this task"}? This cannot be undone from chat.`,
+    };
+  }
     const title = entities.meetingTitle || "this meeting";
     return {
       required: true,

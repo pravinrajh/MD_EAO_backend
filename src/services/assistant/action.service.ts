@@ -21,8 +21,12 @@ import { assistantActionRepository } from "../../repositories/assistantAction.re
 import { canUpdateBudget } from "../project.policy";
 import { meetingService } from "../meeting.service";
 import { actionExecutorService } from "./actionExecutor.service";
+import { aiOrchestrator } from "./ai.orchestrator";
+import { entityResolver } from "./entityResolver.service";
 import { detectActionIntent, extractActionEntities, resolveActionEntities } from "./actionIntentRouter.service";
 import { normalizeQuery } from "./intentRouter.service";
+import { aiPermissionAdapter } from "./permission.adapter";
+import { actionToolName, toolRegistry } from "./toolRegistry";
 import type { ActionActor, PublicActionResult, ResolvedActionEntities } from "./action.types";
 
 const ID_RETRIES = 3;
@@ -111,13 +115,32 @@ function statusMessage(status: AssistantActionStatus): string {
   return "Action failed.";
 }
 
+function entityForAction(intent: AssistantActionIntent): string {
+  if (intent.includes("TASK")) return "task";
+  if (intent.includes("MEETING")) return "meeting";
+  if (intent.includes("PROJECT")) return "project";
+  if (intent.includes("LEAD")) return "lead";
+  if (intent.includes("OPPORTUNITY")) return "opportunity";
+  if (intent.includes("CUSTOMER")) return "customer";
+  if (intent.includes("INVOICE")) return "invoice";
+  if (intent.includes("VENDOR")) return "vendor";
+  if (intent.includes("LAND")) return "land_parcel";
+  if (intent.includes("NOTE")) return "md_note";
+  if (intent.includes("REMINDER")) return "reminder";
+  return "unknown";
+}
+
 function needFlags(intent: AssistantActionIntent) {
   return {
     intent,
-    needTask: intent === "UPDATE_TASK" || intent === "ASSIGN_TASK" || intent === "COMPLETE_TASK",
+    needTask: intent === "UPDATE_TASK" || intent === "ASSIGN_TASK" || intent === "COMPLETE_TASK" || intent === "DELETE_TASK",
     needMeeting: intent === "UPDATE_MEETING" || intent === "CANCEL_MEETING",
     needProject: intent === "UPDATE_PROJECT",
     needEmployee: intent === "ASSIGN_TASK" || intent === "CREATE_MEETING",
+    needInvoice: intent === "UPDATE_INVOICE" || intent === "RECORD_INVOICE_PAYMENT",
+    needVendor: intent === "UPDATE_VENDOR",
+    needParcel: intent === "UPDATE_LAND_PARCEL",
+    needNote: intent === "UPDATE_MD_NOTE",
   };
 }
 
@@ -292,8 +315,12 @@ export const assistantActionService = {
     }
 
     const { original, normalized } = normalizeQuery(input.message);
-    const detected = this.detectActionIntent(normalized);
-    const extracted = this.extractEntities(original, normalized);
+    const { detected, extracted } = await aiOrchestrator.planAction({
+      original,
+      normalized,
+      conversationId: input.conversationId,
+      actor: input.actor,
+    });
     const reserved = await insertPending({
       actionId: await nextAssistantActionId(),
       userId: input.actor.id,
@@ -326,7 +353,15 @@ export const assistantActionService = {
         processingTimeMs,
       });
       logger.info(
-        { actionId, userId: input.actor.id, intent: detected.intent, status, processingTimeMs },
+        {
+          actionId,
+          userId: input.actor.id,
+          intent: detected.intent,
+          tool: actionToolName(detected.intent),
+          entity: entityForAction(detected.intent),
+          status,
+          processingTimeMs,
+        },
         "Assistant action processed",
       );
       return toPublicResult(actionId, detected.intent, status, message, result);
@@ -343,7 +378,7 @@ export const assistantActionService = {
             return finish("UNAUTHORIZED", UNAUTHORIZED_MESSAGE, { status: "UNAUTHORIZED" });
           }
 
-          const resolved = await this.resolveEntities(extracted, input.actor, needFlags(detected.intent));
+          const resolved = await entityResolver.resolveAction(extracted, input.actor, needFlags(detected.intent));
           if (resolved.clarification) {
             return finish("CLARIFICATION_REQUIRED", resolved.clarification.question, {
               field: resolved.clarification.field,
@@ -354,12 +389,16 @@ export const assistantActionService = {
             return finish(
               "CLARIFICATION_REQUIRED",
               `I couldn't find a ${resolved.notFound.field} matching ${resolved.notFound.name}.`,
-              { field: resolved.notFound.field },
+              { status: "ENTITY_NOT_FOUND", field: resolved.notFound.field },
             );
           }
 
           const missing = this.validateAction(detected.intent, resolved);
           if (missing) return finish("CLARIFICATION_REQUIRED", missing, {});
+
+          aiPermissionAdapter.assertAction(detected.intent, input.actor, {
+            hasAssignee: Boolean(resolved.assigneeId),
+          });
 
           const confirm = this.requiresConfirmation(detected.intent, resolved)
             ? await confirmationPreview(detected.intent, resolved, input.actor)
@@ -371,7 +410,7 @@ export const assistantActionService = {
             });
           }
 
-          const executed = await this.executeAction(detected.intent, input.actor, resolved);
+          const executed = await toolRegistry.executeAction(detected.intent, input.actor, resolved);
           return finish("COMPLETED", executed.message, executed.result);
         })(),
         ASSISTANT_ACTION_TIMEOUT_MS,
@@ -432,6 +471,39 @@ export const assistantActionService = {
     }
     if (intent === "CREATE_OPPORTUNITY" && !entities.customerId) {
       return "Which customer is this opportunity for?";
+    }
+    if (intent === "DELETE_TASK" && !entities.taskId) {
+      return "Which task should I delete?";
+    }
+    if (intent === "CREATE_INVOICE" && !entities.customerId) {
+      return "Which customer is this invoice for?";
+    }
+    if (intent === "CREATE_INVOICE" && !entities.amount) {
+      return "What amount should I put on the invoice?";
+    }
+    if ((intent === "UPDATE_INVOICE" || intent === "RECORD_INVOICE_PAYMENT") && !entities.invoiceId) {
+      return "Which invoice do you mean?";
+    }
+    if (intent === "RECORD_INVOICE_PAYMENT" && !entities.amount) {
+      return "What amount was paid?";
+    }
+    if (intent === "CREATE_VENDOR" && !(entities.vendorName || entities.title)) {
+      return "What is the vendor name?";
+    }
+    if (intent === "UPDATE_VENDOR" && !entities.vendorId) {
+      return "Which vendor should I update?";
+    }
+    if (intent === "CREATE_LAND_PARCEL" && !(entities.parcelName || entities.title || entities.location)) {
+      return "What should I name the land parcel?";
+    }
+    if (intent === "UPDATE_LAND_PARCEL" && !entities.parcelId) {
+      return "Which land parcel should I update?";
+    }
+    if (intent === "CREATE_MD_NOTE" && !(entities.noteBody || entities.title || entities.description)) {
+      return "What should the note say?";
+    }
+    if (intent === "UPDATE_MD_NOTE" && !entities.noteId) {
+      return "Which note should I update?";
     }
     if (intent === "CREATE_REMINDER" && !entities.remindAt && !entities.dueDate) {
       return "When should I remind you?";

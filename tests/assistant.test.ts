@@ -160,7 +160,7 @@ async function seed() {
     projectId: chennai._id,
     priority: "MEDIUM",
     status: "PENDING",
-    dueDate: new Date(day.end.getTime() - 60 * 60 * 1000),
+    dueDate: new Date(day.end.getTime() - 1000),
   });
   await Task.create({
     taskId: await nextTaskId(),
@@ -386,8 +386,20 @@ describe("Assistant Query API", () => {
       expect(intentOf("Give me today's report")).toBe("MORNING_REPORT");
       expect(intentOf("How is the company?")).toBe("COMPANY_SUMMARY");
       expect(intentOf("What do I need to do?")).toBe("MY_WORK_SUMMARY");
+      expect(intentOf("What is Sathish's status today?")).toBe("EMPLOYEE_DAILY_STATUS");
+      expect(intentOf("what is sathish staus today")).toBe("EMPLOYEE_DAILY_STATUS");
+      expect(intentOf("sathish today?")).toBe("EMPLOYEE_DAILY_STATUS");
+      expect(intentOf("sathish enna panraru?")).toBe("EMPLOYEE_DAILY_STATUS");
+      expect(intentOf("Give me today's overall business status.")).toBe("MORNING_REPORT");
+      expect(intentOf("Why?")).toBe("PROJECT_HEALTH");
+      expect(intentOf("Who is responsible?")).toBe("PROJECT_STATUS");
+      expect(intentOf("Which projects have high expenses and overdue tasks?")).toBe("DELAYED_PROJECT_WORKLOAD");
       expect(intentOf("What's the weather?")).toBe("UNSUPPORTED");
       expect(intentOf("Create a task")).toBe("UNSUPPORTED");
+      expect(intentOf("hii")).toBe("SMALLTALK");
+      expect(intentOf("Hello")).toBe("SMALLTALK");
+      expect(intentOf("How are you?")).toBe("SMALLTALK");
+      expect(intentOf("MENNA KRSINAKU ENNA TASK ASSIGN TODAY?")).toBe("TODAY_TASKS");
       expect(intentOf("Are we over budget?")).toBe("BUDGET_SUMMARY");
       expect(intentOf("How is finance?")).toBe("FINANCE_SUMMARY");
       expect(intentOf("Show leads")).toBe("LEAD_SUMMARY");
@@ -613,7 +625,7 @@ describe("Assistant Query API", () => {
 
     const response = await ask(ctx.admin.accessToken, "Show Raj's overdue tasks");
     expect(response.body.data.data.status).toBe("CLARIFICATION_REQUIRED");
-    expect(response.body.data.answer).toMatch(/2 employees matching Raj/i);
+    expect(response.body.data.answer).toMatch(/multiple employees named Raj/i);
     expect(response.body.data.confidence).toBe(0.5);
   });
 

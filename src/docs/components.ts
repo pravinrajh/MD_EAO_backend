@@ -871,6 +871,26 @@ export const componentSchemas: Record<string, JsonSchema> = {
     data: { type: "object", additionalProperties: true, description: "Structured payload for Flutter. Do not parse answer." },
     sources: { type: "array", items: { type: "string" } },
     confidence: { type: "number", minimum: 0, maximum: 1, example: 0.98 },
+    toolsUsed: { type: "array", items: { type: "string" }, description: "Registered analytical tools executed for this question, if any." },
+  }),
+  AssistantChatResponse: props({
+    conversationId: { type: "string", example: "CHAT-001" },
+    mode: { type: "string", enum: ["QUERY", "ACTION"], example: "QUERY" },
+    reply: { type: "string", example: "You have 12 pending tasks." },
+    intent: { type: "string", example: "PENDING_TASKS" },
+    status: { type: "string", example: "SUCCESS" },
+    requiresConfirmation: { type: "boolean", example: false },
+    data: { type: "object", additionalProperties: true, description: "Structured payload for the chatbot UI. Do not parse reply." },
+    geminiConnected: { type: "boolean", example: true, description: "True when Gemini is configured. Does not expose secrets." },
+    gemini: {
+      type: "object",
+      additionalProperties: true,
+      description: "Gemini understanding and safe lookup plan for the Gemini tab. Never contains database commands.",
+    },
+    toolsUsed: { type: "array", items: { type: "string" } },
+    queryId: { type: "string" },
+    actionId: { type: "string" },
+    confidence: { type: "number", minimum: 0, maximum: 1 },
   }),
   AssistantQueryHistoryItem: props({
     queryId: { type: "string" },
@@ -1070,7 +1090,7 @@ export const componentSchemas: Record<string, JsonSchema> = {
     },
   },
 
-  Health: props({ timestamp: dateTime() }),
+  Health: props({ timestamp: dateTime(), geminiConnected: { type: "boolean", example: false } }),
   DatabaseHealth: props({ connected: { type: "boolean", example: true }, timestamp: dateTime() }),
 };
 

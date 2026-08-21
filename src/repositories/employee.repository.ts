@@ -66,6 +66,12 @@ export const employeeRepository = {
     return Employee.findById(id).select(EMPLOYEE_SAFE_FIELDS).lean();
   },
 
+  findByIds(ids: string[]) {
+    const unique = [...new Set(ids.filter(Boolean))].slice(0, 100);
+    if (unique.length === 0) return Promise.resolve([]);
+    return Employee.find({ _id: { $in: unique } }).select(EMPLOYEE_SAFE_FIELDS).lean();
+  },
+
   findByUserId(userId: string) {
     return Employee.findOne({ userId }).select(EMPLOYEE_SAFE_FIELDS).lean();
   },

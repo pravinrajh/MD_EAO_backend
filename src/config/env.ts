@@ -30,6 +30,9 @@ const envSchema = z.object({
   WHATSAPP_LINK_CODE_TTL_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
   SWAGGER_ENABLED: z.enum(["true", "false"]).optional(),
   SWAGGER_SERVER_URL: z.string().trim().optional().default(""),
+  GEMINI_API_KEY: z.string().optional().default(""),
+  GEMINI_MODEL: z.string().trim().min(1).default("gemini-2.5-flash"),
+  GEMINI_TIMEOUT_MS: z.coerce.number().int().positive().max(20_000).default(8_000),
 });
 
 const parsed = envSchema.safeParse(process.env);

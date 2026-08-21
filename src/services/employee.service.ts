@@ -105,6 +105,11 @@ export const employeeService = {
     };
   },
 
+  async listByIds(ids: string[]) {
+    const docs = await employeeRepository.findByIds(ids);
+    return docs.map((item) => employeeRepository.toPublic(item));
+  },
+
   async getById(id: string) {
     assertObjectId(id);
     const employee = await employeeRepository.findDetailedById(id);

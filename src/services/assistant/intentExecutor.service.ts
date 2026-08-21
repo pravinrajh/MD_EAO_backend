@@ -11,6 +11,10 @@ import { salesService } from "../sales.service";
 import { taskService } from "../task.service";
 import type { AssistantActor, ExecutorPayload, ResolvedEntities } from "./types";
 import type { AssistantIntent } from "../../utils/constants";
+import { queryPlanExecutor } from "./queryPlanExecutor.service";
+import { validateQueryPlan } from "./queryPlan.types";
+import { dynamicQueryExecutor } from "./dynamicQueryExecutor.service";
+import { validateBqlPlan } from "./bql";
 
 const LIST = { page: 1, limit: ASSISTANT_LIST_LIMIT } as const;
 
@@ -149,6 +153,7 @@ async function projectStatus(actor: AssistantActor, entities: ResolvedEntities):
       budget: summary.financial.budget,
       expense: summary.financial.actualExpense,
       health,
+      manager: personName(summary.project.manager),
     },
     sources: [{ type: "PROJECT", count: 1 }, { type: "TASK", count: summary.tasks.total }],
   };
@@ -544,8 +549,138 @@ async function myWorkSummary(actor: AssistantActor): Promise<ExecutorPayload> {
   };
 }
 
+async function employeeOverdueRanking(actor: AssistantActor, entities: ResolvedEntities) {
+  return queryPlanExecutor.execute(
+    validateQueryPlan({
+      intent: "EMPLOYEE_OVERDUE_RANKING",
+      queryType: "AGGREGATION",
+      datasets: ["tasks", "employees"],
+      tools: [{ tool: "get_overdue_by_employee" }],
+      filters: { overdue: true, projectName: entities.projectName, employeeName: entities.employeeName },
+      groupBy: ["employee"],
+      sort: { field: "count", order: "DESC" },
+      limit: 10,
+    }),
+    actor,
+    entities,
+  );
+}
+
+async function employeeDailyStatus(actor: AssistantActor, entities: ResolvedEntities): Promise<ExecutorPayload> {
+  const assignedTo = entities.employeeId;
+  const now = new Date();
+  const [today, pending, overdue, completed, meetings] = await Promise.all([
+    taskService.today({ ...LIST, assignedTo, sortBy: "dueDate" }, actor),
+    taskService.list({ ...LIST, status: "PENDING", assignedTo, sortBy: "dueDate", sortOrder: "asc" }, actor),
+    taskService.overdue({ ...LIST, assignedTo, sortBy: "dueDate", sortOrder: "asc" }, actor),
+    taskService.list({ ...LIST, status: "COMPLETED", assignedTo, sortBy: "createdAt", sortOrder: "desc" }, actor),
+    meetingService.today({ ...LIST, now, participantId: assignedTo, sortBy: "startTime", sortOrder: "asc" }, actor),
+  ]);
+  const projectNames = [
+    ...new Set(
+      [...today.items, ...pending.items, ...overdue.items]
+        .map((item) => {
+          const record = asRecord(item);
+          const project = asRecord(record.project);
+          return typeof project.name === "string"
+            ? project.name
+            : typeof record.projectName === "string"
+              ? record.projectName
+              : null;
+        })
+        .filter((name): name is string => Boolean(name)),
+    ),
+  ].slice(0, 5);
+  return {
+    intent: "EMPLOYEE_DAILY_STATUS",
+    data: {
+      employeeName: entities.employeeName,
+      employeeId: assignedTo,
+      dateRange: "TODAY",
+      unavailable: ["attendance", "leave"],
+      todayTasks: today.meta.total,
+      pendingTasks: pending.meta.total,
+      overdueTasks: overdue.meta.total,
+      completedTasks: completed.meta.total,
+      todayMeetings: meetings.meta.total,
+      projects: projectNames,
+      tasks: compactTasks(today.items.length ? today.items : pending.items),
+      meetings: compactMeetings(meetings.items),
+    },
+    sources: [
+      { type: "TASK", count: pending.meta.total },
+      { type: "MEETING", count: meetings.meta.total },
+    ],
+  };
+}
+
+async function employeeWorkload(actor: AssistantActor, entities: ResolvedEntities) {
+  return queryPlanExecutor.execute(
+    validateQueryPlan({
+      intent: "EMPLOYEE_WORKLOAD",
+      queryType: "AGGREGATION",
+      datasets: ["tasks", "employees"],
+      tools: [{ tool: "get_employee_workload" }],
+      filters: { pending: true, projectName: entities.projectName, employeeName: entities.employeeName, minPending: entities.minPending },
+      groupBy: ["employee"],
+      sort: { field: "pendingTasks", order: "DESC" },
+      limit: 10,
+    }),
+    actor,
+    entities,
+  );
+}
+
+async function delayedProjectWorkload(actor: AssistantActor, entities: ResolvedEntities) {
+  return queryPlanExecutor.execute(
+    validateQueryPlan({
+      intent: "DELAYED_PROJECT_WORKLOAD",
+      queryType: "MULTI_TOOL",
+      datasets: ["projects", "tasks", "employees"],
+      tools: [
+        { tool: "get_projects" },
+        { tool: "get_project_task_workload" },
+        { tool: "get_employee_workload" },
+      ],
+      filters: {
+        delayed: true,
+        pending: true,
+        projectName: entities.projectName,
+        employeeName: entities.employeeName,
+        minPending: entities.minPending,
+      },
+      groupBy: ["project", "employee"],
+      sort: { field: "pendingTasks", order: "DESC" },
+      limit: 10,
+    }),
+    actor,
+    entities,
+  );
+}
+
+async function dynamicQuery(actor: AssistantActor, entities: ResolvedEntities) {
+  return dynamicQueryExecutor.execute(
+    validateBqlPlan({
+      type: "ANALYSIS",
+      operation: "ANALYZE",
+      sources: ["dashboard", "projects", "tasks"],
+      filters: [],
+      relationships: [],
+      groupBy: [],
+      sort: [],
+      limit: 20,
+      entityHints: {
+        projectName: entities.projectName,
+        employeeName: entities.employeeName,
+      },
+    }),
+    actor,
+    entities,
+  );
+}
+
 const EXECUTORS: Record<
-  Exclude<AssistantIntent, "UNSUPPORTED">,
+  Exclude<AssistantIntent, "UNSUPPORTED" | "SMALLTALK">,
   (actor: AssistantActor, entities: ResolvedEntities) => Promise<ExecutorPayload>
 > = {
   PENDING_TASKS: pendingTasks,
@@ -571,13 +706,18 @@ const EXECUTORS: Record<
   MORNING_REPORT: morningReport,
   COMPANY_SUMMARY: companySummary,
   MY_WORK_SUMMARY: myWorkSummary,
+  EMPLOYEE_OVERDUE_RANKING: employeeOverdueRanking,
+  EMPLOYEE_WORKLOAD: employeeWorkload,
+  DELAYED_PROJECT_WORKLOAD: delayedProjectWorkload,
+  EMPLOYEE_DAILY_STATUS: employeeDailyStatus,
+  DYNAMIC_QUERY: dynamicQuery,
 };
 
 export const intentExecutorService = {
   async execute(intent: AssistantIntent, actor: AssistantActor, entities: ResolvedEntities): Promise<ExecutorPayload> {
-    if (intent === "UNSUPPORTED") {
+    if (intent === "UNSUPPORTED" || intent === "SMALLTALK") {
       return {
-        intent: "UNSUPPORTED",
+        intent,
         data: {},
         sources: [],
       };

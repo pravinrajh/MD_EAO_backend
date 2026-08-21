@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { getDatabaseState } from "../config/database";
+import { env } from "../config/env";
 import { sendError, sendSuccess } from "../utils/apiResponse";
 
 export function getHealth(_req: Request, res: Response): Response {
@@ -8,6 +9,7 @@ export function getHealth(_req: Request, res: Response): Response {
     message: "API is healthy",
     data: {
       timestamp: new Date().toISOString(),
+      geminiConnected: Boolean(env.GEMINI_API_KEY),
     },
   });
 }

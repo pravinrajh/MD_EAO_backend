@@ -1,3 +1,4 @@
+import { env } from "../../config/env";
 import { logger } from "../../config/logger";
 import {
   ASSISTANT_QUERY_TIMEOUT_MS,
@@ -9,6 +10,9 @@ import { isDuplicateKey } from "../../utils/mongo";
 import { buildPaginationMeta, parsePagination } from "../../utils/pagination";
 import { nextQueryId } from "../../utils/sequence";
 import { assistantQueryRepository } from "../../repositories/assistantQuery.repository";
+import { aiOrchestrator } from "./ai.orchestrator";
+import { entityResolver } from "./entityResolver.service";
+import { getLlmProvider } from "./gemini.provider";
 import { intentExecutorService } from "./intentExecutor.service";
 import {
   detectIntent,
@@ -16,7 +20,13 @@ import {
   normalizeQuery,
   resolveEntities,
 } from "./intentRouter.service";
+import { aiPermissionAdapter } from "./permission.adapter";
+import { queryPlanExecutor } from "./queryPlanExecutor.service";
+import { dynamicQueryExecutor } from "./dynamicQueryExecutor.service";
+import { classifyQueryEvaluation } from "./evaluation";
+import { looksLikeMissingDomain } from "./dynamicQueryPlanner.service";
 import { formatAssistantResponse } from "./responseFormatter.service";
+import { queryToolName, toolRegistry } from "./toolRegistry";
 import type {
   AssistantActor,
   AssistantQueryResult,
@@ -36,6 +46,10 @@ const PROJECT_INTENTS = new Set<AssistantIntent>([
 ]);
 const UNSUPPORTED_ANSWER =
   "I can't answer that yet. I currently support company tasks, projects, meetings, sales, finance, and executive reports.";
+const SMALLTALK_ANSWER =
+  "Hi! I'm your office assistant. Ask me about projects, tasks, people, meetings, or sales.";
+const SMALLTALK_OFFLINE_ANSWER =
+  "Hi! I'm your office assistant. Gemini is not connected right now, so this greeting is local. Ask me about projects, tasks, people, meetings, or sales — those answers still come from live office data.";
 
 function scrubSecrets(message: string): string {
   return message
@@ -181,6 +195,28 @@ function publicEntities(resolved: ResolvedEntities): Record<string, unknown> {
   if (resolved.dateRange) entities.dateRange = resolved.dateRange;
   if (resolved.priority) entities.priority = resolved.priority;
   if (resolved.status) entities.status = resolved.status;
+  if (typeof resolved.minPending === "number") entities.minPending = resolved.minPending;
+  return entities;
+}
+
+function conversationEntities(resolved: ResolvedEntities, data: Record<string, unknown>): Record<string, unknown> {
+  const entities = publicEntities(resolved);
+  const employees = Array.isArray(data.employees) ? data.employees[0] : null;
+  if (employees && typeof employees === "object") {
+    const row = employees as Record<string, unknown>;
+    if (!entities.employeeName && typeof row.employee === "string") entities.employeeName = row.employee;
+    if (!entities.employeeName && typeof row.employeeName === "string") entities.employeeName = row.employeeName;
+    if (typeof row.employeeId === "string") entities.employeeId = row.employeeId;
+  }
+  const projects = Array.isArray(data.projects) ? data.projects[0] : null;
+  if (projects && typeof projects === "object") {
+    const row = projects as Record<string, unknown>;
+    if (!entities.projectName && typeof row.projectName === "string") entities.projectName = row.projectName;
+    if (!entities.projectName && typeof row.name === "string") entities.projectName = row.name;
+    if (!entities.projectId && typeof row.id === "string") entities.projectId = row.id;
+  }
+  if (!entities.projectName && typeof data.name === "string") entities.projectName = data.name;
+  if (!entities.projectId && typeof data.projectId === "string") entities.projectId = data.projectId;
   return entities;
 }
 
@@ -225,13 +261,56 @@ export const assistantService = {
     const started = Date.now();
     const queryId = await allocateQueryId();
     const { original, normalized } = normalizeQuery(input.message);
-    const detected = detectIntent(normalized);
-    const extracted: ExtractedEntities = extractEntities(original, normalized);
+    const { detected, extracted, plan, bql, llm } = await aiOrchestrator.planQuery({
+      original,
+      normalized,
+      conversationId: input.conversationId,
+      actor: input.actor,
+    });
+
+    const geminiTrace = (extra?: Record<string, unknown>) => ({
+      connected: getLlmProvider().isEnabled(),
+      used: Boolean(llm) || Boolean(extra?.reply),
+      model: env.GEMINI_MODEL,
+      understood: llm ? `${llm.kind}:${llm.intent}` : extra?.understood,
+      english: llm?.english,
+      entities: llm?.entities ?? extracted,
+      lookupPlan: bql
+        ? {
+            operation: bql.operation,
+            sources: bql.sources,
+            filters: bql.filters,
+            dateRange: bql.dateRange,
+            entityHints: bql.entityHints,
+          }
+        : plan
+          ? { intent: plan.intent, tools: plan.tools, filters: plan.filters }
+          : null,
+      ...extra,
+    });
 
     const persist = async (
       payload: Omit<AssistantQueryResult, "queryId"> & { status: AssistantQueryStatus; entities?: Record<string, unknown> },
     ): Promise<AssistantQueryResult> => {
       const processingTimeMs = Date.now() - started;
+      const data = {
+        ...payload.data,
+        gemini: geminiTrace(payload.data?.gemini as Record<string, unknown> | undefined),
+        evaluation: classifyQueryEvaluation({
+          originalQuestion: original,
+          normalizedQuestion: normalized,
+          userRole: input.actor.role,
+          intent: payload.intent,
+          serviceCalled: queryToolName(payload.intent),
+          dataStatus: typeof payload.data.status === "string" ? payload.data.status : undefined,
+          queryStatus: payload.status,
+          missingDomain: typeof payload.data.missingDomain === "string" ? payload.data.missingDomain : undefined,
+          notFoundField: typeof payload.data.field === "string" ? payload.data.field : undefined,
+          clarification: payload.data.status === "CLARIFICATION_REQUIRED",
+          timeout: payload.data.status === "TIMEOUT",
+          forbidden: payload.data.status === "FORBIDDEN",
+        }),
+      };
       await saveQuery({
         queryId,
         userId: input.actor.id,
@@ -240,7 +319,7 @@ export const assistantService = {
         intent: payload.intent,
         entities: payload.entities ?? extracted,
         answer: payload.answer,
-        data: payload.data,
+        data,
         sources: payload.sources,
         confidence: payload.confidence,
         status: payload.status,
@@ -251,6 +330,7 @@ export const assistantService = {
           queryId,
           userId: input.actor.id,
           intent: payload.intent,
+          tool: queryToolName(payload.intent),
           status: payload.status,
           processingTimeMs,
         },
@@ -260,17 +340,47 @@ export const assistantService = {
         queryId,
         intent: payload.intent,
         answer: payload.answer,
-        data: payload.data,
+        data,
         sources: payload.sources,
         confidence: payload.confidence,
+        toolsUsed: Array.isArray(payload.data.toolsUsed) ? (payload.data.toolsUsed as string[]) : undefined,
       };
     };
 
+    if (detected.intent === "SMALLTALK") {
+      const provider = getLlmProvider();
+      const geminiConnected = provider.isEnabled();
+      let answer = geminiConnected ? SMALLTALK_ANSWER : SMALLTALK_OFFLINE_ANSWER;
+      let geminiReplied = false;
+      if (geminiConnected && provider.chat) {
+        const spoken = await provider.chat({ message: original, kind: "smalltalk" });
+        if (spoken) {
+          answer = spoken;
+          geminiReplied = true;
+        }
+      }
+      return persist({
+        intent: "SMALLTALK",
+        answer,
+        data: {
+          geminiConnected,
+          geminiReplied,
+          gemini: { understood: "query:SMALLTALK", reply: answer },
+        },
+        sources: [],
+        confidence: 0.99,
+        status: "SUCCESS",
+      });
+    }
+
     if (detected.intent === "UNSUPPORTED") {
+      const missing = looksLikeMissingDomain(normalized);
       return persist({
         intent: "UNSUPPORTED",
-        answer: UNSUPPORTED_ANSWER,
-        data: {},
+        answer: missing
+          ? `I don't have ${missing} data connected to the system.`
+          : UNSUPPORTED_ANSWER,
+        data: missing ? { missingDomain: missing } : {},
         sources: [],
         confidence: 0,
         status: "UNSUPPORTED",
@@ -280,10 +390,12 @@ export const assistantService = {
     try {
       const executed = await withTimeout(
         (async () => {
-          const requireProject =
-            PROJECT_INTENTS.has(detected.intent) &&
-            (Boolean(extracted.projectName) || detected.intent !== "PROJECT_HEALTH");
-          const resolved = await resolveEntities(extracted, input.actor, { requireProject });
+          const requireProject = bql || plan
+            ? Boolean(extracted.projectName)
+            : PROJECT_INTENTS.has(detected.intent) &&
+              (Boolean(extracted.projectName) || detected.intent !== "PROJECT_HEALTH");
+          const requireEmployee = detected.intent === "EMPLOYEE_DAILY_STATUS";
+          const resolved = await entityResolver.resolveQuery(extracted, input.actor, { requireProject, requireEmployee });
 
           if (resolved.clarification) {
             return {
@@ -313,12 +425,27 @@ export const assistantService = {
             };
           }
 
-          const payload = await intentExecutorService.execute(detected.intent, input.actor, resolved);
+          const payload = await (async () => {
+            aiPermissionAdapter.assertQuery(detected.intent, input.actor);
+            if (bql) {
+              return dynamicQueryExecutor.execute(bql, input.actor, resolved);
+            }
+            if (plan) {
+              if (extracted.minPending && !plan.filters.minPending) plan.filters.minPending = extracted.minPending;
+              return queryPlanExecutor.execute(plan, input.actor, resolved);
+            }
+            return toolRegistry.executeQuery(detected.intent, input.actor, resolved);
+          })();
           return {
             kind: "ok" as const,
             resolved,
             payload,
-            formatted: formatAssistantResponse(payload.intent, payload.data, payload.sources),
+            formatted: await aiOrchestrator.finalizeQueryAnswer(
+              payload.intent,
+              payload.data,
+              payload.sources,
+              original,
+            ),
           };
         })(),
         ASSISTANT_QUERY_TIMEOUT_MS,
@@ -360,7 +487,7 @@ export const assistantService = {
           empty: asEmpty(executed.payload.data),
         }),
         status: "SUCCESS",
-        entities: publicEntities(executed.resolved),
+        entities: conversationEntities(executed.resolved, executed.payload.data),
       });
     } catch (error) {
       const processingTimeMs = Date.now() - started;

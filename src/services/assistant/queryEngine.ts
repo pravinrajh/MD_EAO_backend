@@ -1,4 +1,5 @@
 import type { AssistantIntent } from "../../utils/constants";
+import { isReadQuestion } from "./actionEngine";
 import type { AssistantQueryEngine, DetectedIntent } from "./types";
 
 type IntentRule = {
@@ -17,6 +18,56 @@ const re = (text: string, pattern: RegExp) => pattern.test(text);
  */
 const RULES: IntentRule[] = [
   {
+    intent: "SMALLTALK",
+    score: 101,
+    test: (n) => isSmallTalk(n),
+  },
+  {
+    intent: "PROJECT_HEALTH",
+    score: 103,
+    test: (n) => /^(why|why is it(?: at risk)?|why delayed)$/.test(n),
+  },
+  {
+    intent: "PROJECT_STATUS",
+    score: 103,
+    test: (n) => /^(who is responsible|who is handling|who is the manager)$/.test(n),
+  },
+  {
+    intent: "PENDING_TASKS",
+    score: 103,
+    test: (n) => /^(what is pending|what s pending|pending)$/.test(n),
+  },
+  {
+    intent: "EMPLOYEE_DAILY_STATUS",
+    score: 97,
+    test: (n) => isEmployeeDailyStatus(n),
+  },
+  {
+    intent: "EMPLOYEE_OVERDUE_RANKING",
+    score: 99,
+    test: (n) =>
+      (/\b(which|who)\b/.test(n) && /\boverdue\b/.test(n) && /\b(employee|most)\b/.test(n)) ||
+      (/\bmost overdue\b/.test(n) && /\b(employee|who)\b/.test(n)),
+  },
+  {
+    intent: "DELAYED_PROJECT_WORKLOAD",
+    score: 99,
+    test: (n) =>
+      (/\bdelayed\b/.test(n) && /\bprojects?\b/.test(n)) ||
+      (/\boverloaded\b/.test(n) && /\bprojects?\b/.test(n)) ||
+      (/\bprojects?\b/.test(n) && /\b(workload|pending tasks|because)\b/.test(n) && /\b(employee|assigned)\b/.test(n)) ||
+      (/\bprojects?\b/.test(n) && /\b(expense|expenses|spending|spend)\b/.test(n) && /\boverdue\b/.test(n)) ||
+      (/\bprojects?\b/.test(n) && /\b(low progress|progress)\b/.test(n) && /\b(high spending|spending|expense)\b/.test(n)),
+  },
+  {
+    intent: "EMPLOYEE_WORKLOAD",
+    score: 97,
+    test: (n) =>
+      /\boverloaded\b/.test(n) ||
+      (/\b(most|highest)\b/.test(n) && /\bpending\b/.test(n) && /\b(employee|workload|who)\b/.test(n)) ||
+      /\bemployee workload\b/.test(n),
+  },
+  {
     intent: "WEEKLY_FINANCIAL_REQUIREMENT",
     score: 100,
     test: (n) =>
@@ -34,7 +85,35 @@ const RULES: IntentRule[] = [
       has(n, "today", "report") ||
       has(n, "daily report") ||
       has(n, "give me today") ||
-      re(n, /\btoday'?s report\b/),
+      re(n, /\btoday'?s report\b/) ||
+      (has(n, "overall") && any(n, "status", "business")) ||
+      (has(n, "business status") && has(n, "today")) ||
+      (has(n, "happening") && has(n, "today")),
+  },
+  {
+    intent: "INVOICE_SUMMARY",
+    score: 96,
+    test: (n) => re(n, /\b(invoice|invoices)\b/) && isReadQuestion(n),
+  },
+  {
+    intent: "VENDOR_LIST",
+    score: 96,
+    test: (n) => re(n, /\bvendors?\b/) && isReadQuestion(n),
+  },
+  {
+    intent: "LAND_PARCEL_LIST",
+    score: 96,
+    test: (n) => any(n, "land", "parcel") && isReadQuestion(n),
+  },
+  {
+    intent: "MD_NOTES",
+    score: 96,
+    test: (n) => re(n, /\bnotes?\b/) && isReadQuestion(n),
+  },
+  {
+    intent: "PENDING_TASKS",
+    score: 96,
+    test: (n) => has(n, "pending") && has(n, "project") && !has(n, "overdue") && !re(n, /\btasks?\b/),
   },
   {
     intent: "PROJECT_FINANCE",
@@ -42,7 +121,9 @@ const RULES: IntentRule[] = [
     test: (n) =>
       has(n, "project") && any(n, "spent", "spend", "expense", "expenses", "budget", "finance", "cost") &&
       !has(n, "over budget") &&
-      !has(n, "company"),
+      !has(n, "company") &&
+      !has(n, "overdue") &&
+      !/\bwhich projects\b/.test(n),
   },
   {
     intent: "PROJECT_TASKS",
@@ -120,9 +201,9 @@ const RULES: IntentRule[] = [
     intent: "PROJECT_STATUS",
     score: 83,
     test: (n) =>
-      has(n, "project") &&
-      (any(n, "how is", "status", "progress") || re(n, /\bhow is .+\b/)) &&
-      !has(n, "company"),
+      !has(n, "company") &&
+      ((has(n, "project") && (any(n, "how is", "status", "progress", "doing") || re(n, /\bhow is .+\b/))) ||
+        /^[a-z0-9][a-z0-9 &.-]{1,40}\s+status$/.test(n)),
   },
   {
     intent: "SALES_SUMMARY",
@@ -164,13 +245,51 @@ const RULES: IntentRule[] = [
 const WRITE_HINT =
   /\b(create|assign|update|delete|schedule|remind|cancel|complete|reschedule)\b.+\b(task|project|meeting|reminder|lead|opportunity)\b|\b(create|assign|schedule|remind)\b/;
 
+const BUSINESS_HINT =
+  /\b(task|tasks|project|projects|meeting|meetings|sales|lead|leads|finance|financial|budget|employee|employees|overdue|pending|pipeline|opportunity|opportunities|customer|customers|report|workload|money)\b/;
+
+export function isEmployeeDailyStatus(normalized: string): boolean {
+  const n = normalized.trim();
+  if (!n) return false;
+  if (/\b(attendance|leave|vendor|collection)\b/.test(n)) return false;
+  if (/\b(pending|overdue)\b/.test(n) && /\btasks?\b/.test(n) && !/\b(status|staus|doing)\b/.test(n)) return false;
+  if (/\b(company|pipeline|budget|attention|morning report|create|assign)\b/.test(n)) return false;
+  if (/\bprojects?\b/.test(n)) return false;
+  if (/^[a-z0-9]{2,5}\s+status$/.test(n)) return false;
+  const words = n.split(/\s+/);
+  const shortToday = words.length <= 4 && /\btoday$/.test(n);
+  return (
+    /\b[a-z][a-z.'-]{1,40}(?:'s| s)?\s+(?:status|staus|work|doing|handling)\b/.test(n) ||
+    shortToday ||
+    /\b(enna panra|panraru|enna panraru|enna panrathu)\b/.test(n)
+  );
+}
+
+export function isProjectFollowUp(normalized: string): boolean {
+  return /^(why|why is it(?: at risk)?|why delayed|who is responsible|who is handling|who is the manager|what is pending|what s pending|pending)$/.test(
+    normalized,
+  );
+}
+
+export function isSmallTalk(normalized: string): boolean {
+  const n = normalized.trim();
+  if (!n || BUSINESS_HINT.test(n)) return false;
+  if (/^(hi+|h+e+y+|h+e+l+o+|hai+|hey+|yo|hola|namaste|vanakkam)( there| boss| team)?$/.test(n)) return true;
+  if (/^(good (morning|afternoon|evening|night)|thanks|thank you|thankyou|ok|okay|cool|great|nice|awesome)$/.test(n)) {
+    return true;
+  }
+  return /^(how are you|how r you|how r u|who are you|what can you do|what do you do|help|are you there|are you online|are you connected|are you gemini|is gemini connected)$/.test(
+    n,
+  );
+}
+
 export class RuleBasedQueryEngine implements AssistantQueryEngine {
   detectIntent(normalized: string): DetectedIntent {
     if (!normalized) {
       return { intent: "UNSUPPORTED", confidence: 0, matchType: "none" };
     }
 
-    if (WRITE_HINT.test(normalized) && !normalized.includes("what") && !normalized.includes("how") && !normalized.includes("show") && !normalized.includes("give")) {
+    if (WRITE_HINT.test(normalized) && !isReadQuestion(normalized) && !normalized.includes("what") && !normalized.includes("how") && !normalized.includes("show") && !normalized.includes("give")) {
       return { intent: "UNSUPPORTED", confidence: 0, matchType: "none" };
     }
 
@@ -196,7 +315,7 @@ export class RuleBasedQueryEngine implements AssistantQueryEngine {
  */
 export class LLMQueryEngine implements AssistantQueryEngine {
   detectIntent(_normalized: string): DetectedIntent {
-    throw new Error("LLMQueryEngine is not enabled. Step 10 uses RuleBasedQueryEngine.");
+    throw new Error("LLMQueryEngine is not used directly. GeminiProvider classifies intents asynchronously.");
   }
 }
 

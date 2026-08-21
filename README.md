@@ -31,6 +31,16 @@ Default HTTP port is **5050**. macOS AirPlay Receiver already binds **5000** and
 
 Swagger UI: [http://localhost:5050/api-docs](http://localhost:5050/api-docs)
 
+Optional Gemini (intent classification and spoken answers only; never MongoDB access):
+
+```
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.0-flash
+GEMINI_TIMEOUT_MS=4000
+```
+
+If `GEMINI_API_KEY` is empty, the existing rule-based assistant engines are used.
+
 ## Health
 
 ```http
@@ -291,10 +301,11 @@ npm run seed:performance
 
 ## Assistant Query API
 
-Read-only natural-language queries over live MongoDB data. The assistant never creates, updates, or deletes business records. The only write is `AssistantQuery` history (`QRY-000001`). Intent routing is deterministic (`RuleBasedQueryEngine`); an LLM is not required and must never query MongoDB or bypass RBAC.
+Read-only natural-language queries over live MongoDB data. The assistant never creates, updates, or deletes business records. The only write is `AssistantQuery` history (`QRY-000001`). Intent routing uses `RuleBasedQueryEngine`, with optional Gemini (`GEMINI_API_KEY`) as a classifier and response phrasing provider. Gemini never queries MongoDB or bypasses RBAC.
 
 ```http
 POST /api/v1/assistant/query
+POST /api/v1/ai/query
 GET  /api/v1/assistant/history
 ```
 
@@ -314,6 +325,7 @@ Authenticated write path for the assistant. Natural language is never authorizat
 
 ```http
 POST /api/v1/assistant/action
+POST /api/v1/ai/action
 POST /api/v1/assistant/action/:actionId/confirm
 GET  /api/v1/assistant/actions/history
 ```

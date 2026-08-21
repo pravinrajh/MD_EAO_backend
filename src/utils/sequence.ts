@@ -96,3 +96,23 @@ export async function nextWhatsAppConversationId(session?: ClientSession | null)
 export async function nextWhatsAppIdentityId(session?: ClientSession | null): Promise<string> {
   return padded("WAID", await nextSequence("whatsappIdentityId", session));
 }
+
+export async function nextInvoiceId(session?: ClientSession | null): Promise<string> {
+  return padded("INV", await nextSequence("invoiceId", session));
+}
+
+export async function nextInvoicePaymentId(session?: ClientSession | null): Promise<string> {
+  return padded("PAY", await nextSequence("invoicePaymentId", session));
+}
+
+export async function nextVendorId(session?: ClientSession | null): Promise<string> {
+  return padded("VND", await nextSequence("vendorId", session));
+}
+
+export async function nextLandParcelId(session?: ClientSession | null): Promise<string> {
+  return padded("LND", await nextSequence("landParcelId", session));
+}
+
+export async function nextMdNoteId(session?: ClientSession | null): Promise<string> {
+  return padded("NOTE", await nextSequence("mdNoteId", session));
+}

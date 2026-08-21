@@ -25,6 +25,7 @@ export const OPENAPI_TAGS = [
   { name: "Notifications", description: "In-app notifications and notification state management." },
   { name: "Notification Preferences", description: "Channel, category, and quiet-hour preferences." },
   { name: "WhatsApp", description: "WhatsApp webhook and identity integration." },
+  { name: "AI", description: "AI orchestration aliases for assistant query, action, and chatbot chat." },
   { name: "Health", description: "Liveness and database connectivity checks." },
 ] as const;
 

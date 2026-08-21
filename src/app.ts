@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import mongoSanitize from "express-mongo-sanitize";
+import path from "node:path";
 import { env } from "./config/env";
 import { API_PREFIX } from "./utils/constants";
 import healthRoutes from "./routes/health.routes";
@@ -21,9 +22,14 @@ import financeRoutes from "./routes/finance.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import assistantRoutes from "./routes/assistant.routes";
 import assistantActionRoutes from "./routes/assistantAction.routes";
+import aiRoutes from "./routes/ai.routes";
 import reminderRoutes from "./routes/reminder.routes";
 import notificationRoutes from "./routes/notification.routes";
 import notificationPreferenceRoutes from "./routes/notificationPreference.routes";
+import invoiceRoutes from "./routes/invoice.routes";
+import vendorRoutes from "./routes/vendor.routes";
+import landParcelRoutes from "./routes/landParcel.routes";
+import mdNoteRoutes from "./routes/mdNote.routes";
 import whatsAppWebhookRoutes from "./routes/whatsappWebhook.routes";
 import whatsAppLinkRoutes from "./routes/whatsappLink.routes";
 import { apiRateLimiter } from "./middlewares/rateLimit.middleware";
@@ -72,13 +78,21 @@ export function createApp() {
   app.use(`${API_PREFIX}/dashboard`, dashboardRoutes);
   app.use(`${API_PREFIX}/assistant`, assistantRoutes);
   app.use(`${API_PREFIX}/assistant`, assistantActionRoutes);
+  app.use(`${API_PREFIX}/ai`, aiRoutes);
   app.use(`${API_PREFIX}/reminders`, reminderRoutes);
+  app.use(`${API_PREFIX}/invoices`, invoiceRoutes);
+  app.use(`${API_PREFIX}/vendors`, vendorRoutes);
+  app.use(`${API_PREFIX}/land-parcels`, landParcelRoutes);
+  app.use(`${API_PREFIX}/md-notes`, mdNoteRoutes);
   app.use(`${API_PREFIX}/notifications`, notificationRoutes);
   app.use(`${API_PREFIX}/notification-preferences`, notificationPreferenceRoutes);
   app.use(`${API_PREFIX}/webhooks/whatsapp`, whatsAppWebhookRoutes);
   app.use(`${API_PREFIX}/whatsapp`, whatsAppLinkRoutes);
 
   mountSwagger(app);
+
+  const chatDir = path.join(process.cwd(), "public", "chat");
+  app.use("/chat", express.static(chatDir));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

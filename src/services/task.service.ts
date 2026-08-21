@@ -564,4 +564,33 @@ export const taskService = {
     logger.info({ taskId: updated.taskId, deletedBy: actor.id }, "Task soft-deleted");
     return taskRepository.toPublic(updated);
   },
+
+  async workloadByAssignee(
+    actor: Actor,
+    options: {
+      projectId?: string;
+      assignedTo?: string;
+      overdueOnly?: boolean;
+      projectIds?: string[];
+      groupBy?: Array<"employee" | "project">;
+      limit?: number;
+    } = {},
+  ) {
+    const { teamIds } = await resolveScope(actor);
+    if (options.assignedTo && !canAccessAssignee(actor, options.assignedTo, teamIds) && !isPrivileged(actor.role)) {
+      throw new ForbiddenError("You cannot filter tasks for that employee");
+    }
+    const limit = Math.min(Math.max(options.limit ?? 10, 1), 100);
+    return taskRepository.workloadByAssignee(
+      {
+        scope: visibilityFilter(actor, teamIds),
+        projectId: options.projectId,
+        assignedTo: options.assignedTo,
+        overdueOnly: options.overdueOnly,
+        projectIds: options.projectIds,
+        groupBy: options.groupBy,
+        limit,
+      },
+    );
+  },
 };

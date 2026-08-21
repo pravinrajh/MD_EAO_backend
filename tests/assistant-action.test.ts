@@ -224,8 +224,11 @@ describe("Assistant Action API", () => {
 
   describe("intent mapping", () => {
     it("maps supported and blocked examples", () => {
+      expect(intentOf("Create a task called Electrical Verification and assign it to Raju.")).toBe("CREATE_TASK");
       expect(intentOf("Create a task to call ABC tomorrow")).toBe("CREATE_TASK");
       expect(intentOf("Assign the electrical task to Raj")).toBe("ASSIGN_TASK");
+      expect(intentOf("Give it to Sathish")).toBe("ASSIGN_TASK");
+      expect(intentOf("MENNA KRSINAKU ENNA TASK ASSIGN TODAY?")).toBe("UNSUPPORTED");
       expect(intentOf("Mark the material verification task completed")).toBe("COMPLETE_TASK");
       expect(intentOf("Change this task priority to high")).toBe("UPDATE_TASK");
       expect(intentOf("Schedule a meeting tomorrow at 10 AM")).toBe("CREATE_MEETING");
@@ -255,6 +258,12 @@ describe("Assistant Action API", () => {
     );
     expect(extracted.employeeName).toBe("Raj");
     expect(extracted.datePhrase).toBe("tomorrow");
+    const named = extractActionEntities(
+      "Create a task called Electrical Verification and assign it to Raju.",
+      normalizeQuery("Create a task called Electrical Verification and assign it to Raju.").normalized,
+    );
+    expect(named.title).toBe("Electrical Verification");
+    expect(named.employeeName).toBe("Raju");
     const meeting = extractActionEntities(
       "Schedule a project review tomorrow at 4 PM with Raj",
       normalizeQuery("Schedule a project review tomorrow at 4 PM with Raj").normalized,
@@ -480,7 +489,7 @@ describe("Assistant Action API", () => {
     await createEmployeeForUser(other, { phone: "9876500999", firstName: "Raj", lastName: "Second" });
     const response = await act(ctx.admin.accessToken, "Assign the electrical verification task to Raj");
     expect(response.body.data.status).toBe("CLARIFICATION_REQUIRED");
-    expect(response.body.data.message).toMatch(/2 employees/i);
+    expect(response.body.data.message).toMatch(/multiple employees named Raj/i);
   });
 
   it("returns unsupported for finance and destructive operations", async () => {

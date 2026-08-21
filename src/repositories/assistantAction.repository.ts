@@ -59,6 +59,14 @@ export const assistantActionRepository = {
     return AssistantAction.findOne({ userId, idempotencyKey }).select(ASSISTANT_ACTION_SAFE_FIELDS).lean();
   },
 
+  findLatestCompleted(userId: string, conversationId?: string) {
+    if (!conversationId) return Promise.resolve(null);
+    return AssistantAction.findOne({ userId, conversationId, status: "COMPLETED" })
+      .select(ASSISTANT_ACTION_SAFE_FIELDS)
+      .sort({ createdAt: -1 })
+      .lean();
+  },
+
   async list(filters: AssistantActionListFilters) {
     const query: FilterQuery<AssistantActionDocument> = { userId: filters.userId };
     if (filters.conversationId) query.conversationId = filters.conversationId;

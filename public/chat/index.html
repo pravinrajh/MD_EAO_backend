@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MD Assistant</title>
+    <link rel="stylesheet" href="/chat/chat.css" />
+  </head>
+  <body>
+    <div class="app">
+      <section id="login-panel" class="panel login">
+        <div class="brand">
+          <span class="mark">MD</span>
+          <div>
+            <h1>Office Assistant</h1>
+            <p>Ask your live business data. Answers come from MongoDB.</p>
+            <p id="login-gemini" class="gemini-note">Checking Gemini…</p>
+          </div>
+        </div>
+        <form id="login-form">
+          <label>
+            Email
+            <input id="email" type="email" autocomplete="username" value="admin@office.local" required />
+          </label>
+          <label>
+            Password
+            <input id="password" type="password" autocomplete="current-password" value="SecurePassword123" required />
+          </label>
+          <button type="submit">Sign in and chat</button>
+          <p id="login-error" class="error" hidden></p>
+        </form>
+      </section>
+
+      <section id="chat-panel" class="panel chat" hidden>
+        <header class="topbar">
+          <div>
+            <strong>MD Assistant</strong>
+            <span id="user-label">Signed in</span>
+            <span id="gemini-status" class="gemini-pill off">Checking Gemini…</span>
+          </div>
+          <button id="logout" type="button">Sign out</button>
+        </header>
+        <div id="messages" class="messages"></div>
+        <form id="chat-form" class="composer">
+          <input id="message" type="text" maxlength="2000" placeholder="Ask anything about projects, tasks, people…" autocomplete="off" required />
+          <button type="submit">Send</button>
+        </form>
+      </section>
+    </div>
+    <script src="/chat/chat.js"></script>
+  </body>
+</html>
