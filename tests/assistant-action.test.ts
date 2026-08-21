@@ -105,6 +105,13 @@ async function seed() {
     firstName: "Raj",
     managerId: String(managerEmp._id),
   });
+  const sathishUser = await createUser("EMPLOYEE", "sathish@example.com", "9876500905");
+  const sathishEmp = await createEmployeeForUser(sathishUser, {
+    phone: "9876500905",
+    firstName: "Sathish",
+    lastName: "Raman",
+    managerId: String(managerEmp._id),
+  });
   await createEmployeeForUser(outsiderUser, { phone: "9876500904", firstName: "Priya" });
 
   const chennai = await Project.create({
@@ -206,6 +213,8 @@ async function seed() {
     manager: await loginAs("manager@example.com"),
     raj: await loginAs("raj@example.com"),
     out: await loginAs("out@example.com"),
+    sathishEmployee: sathishEmp,
+    chennai,
   };
 }
 
@@ -553,5 +562,59 @@ describe("Assistant Action API", () => {
     const indexes = await AssistantAction.collection.indexes();
     expect(indexes.some((index) => index.key.actionId === 1 && index.unique)).toBe(true);
     expect(indexes.some((index) => index.key.userId === 1 && index.key.createdAt === -1)).toBe(true);
+  });
+
+  it("detects informal CREATE_TASK / CREATE_MEETING / DELETE_TASK and spelling fixes", () => {
+    expect(intentOf("Sathish needs to collect the amount from Chennai project")).toBe("CREATE_TASK");
+    expect(intentOf("Sathish meet me at 11 tomorrow")).toBe("CREATE_MEETING");
+    expect(intentOf("Delete this task")).toBe("DELETE_TASK");
+    expect(normalizeQuery("sathis follow tomrw in chenai").normalized).toContain("sathish");
+    expect(normalizeQuery("sathis follow tomrw in chenai").normalized).toContain("tomorrow");
+    expect(normalizeQuery("sathis follow tomrw in chenai").normalized).toContain("chennai");
+    expect(parseNaturalTime("11")).toEqual({ hour: 11, minute: 0 });
+  });
+
+  it("creates informal task with project link and requires confirmation for delete", async () => {
+    const ctx = await seed();
+    const created = await act(ctx.admin.accessToken, "Sathish needs to collect the amount from Chennai project", {
+      conversationId: "CONV-INFORMAL-1",
+    });
+    expect(created.status).toBe(200);
+    expect(created.body.data.status).toBe("COMPLETED");
+    expect(created.body.data.intent).toBe("CREATE_TASK");
+    expect(created.body.data.result.taskId).toMatch(/^TASK-/);
+
+    const task = await Task.findOne({ taskId: created.body.data.result.taskId }).lean();
+    expect(String(task?.projectId)).toBe(String(ctx.chennai._id));
+    expect(String(task?.assignedTo)).toBe(String(ctx.sathishEmployee._id));
+
+    const meeting = await act(ctx.admin.accessToken, "Sathish meet me at 11 tomorrow", {
+      conversationId: "CONV-INFORMAL-2",
+    });
+    expect(meeting.status).toBe(200);
+    expect(meeting.body.data.status).toBe("COMPLETED");
+    expect(meeting.body.data.intent).toBe("CREATE_MEETING");
+
+    const del = await act(ctx.admin.accessToken, `Delete task ${created.body.data.result.taskId}`, {
+      conversationId: "CONV-INFORMAL-3",
+    });
+    expect(del.status).toBe(200);
+    expect(del.body.data.status).toBe("REQUIRES_CONFIRMATION");
+    expect(del.body.data.requiresConfirmation).toBe(true);
+  });
+
+  it("deduplicates chat actions with conversation fingerprint when Idempotency-Key is absent", async () => {
+    const ctx = await seed();
+    const first = await request(app)
+      .post("/api/v1/assistant/chat")
+      .set(auth(ctx.admin.accessToken))
+      .send({ message: "Create a task to call ABC Industries tomorrow", conversationId: "CONV-DEDUP-1" });
+    const second = await request(app)
+      .post("/api/v1/assistant/chat")
+      .set(auth(ctx.admin.accessToken))
+      .send({ message: "Create a task to call ABC Industries tomorrow", conversationId: "CONV-DEDUP-1" });
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(second.body.data.actionId).toBe(first.body.data.actionId);
   });
 });

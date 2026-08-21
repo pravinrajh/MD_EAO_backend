@@ -1,4 +1,5 @@
 import { assistantActionRepository } from "../../repositories/assistantAction.repository";
+import { assistantQueryRepository } from "../../repositories/assistantQuery.repository";
 import type { AssistantIntent } from "../../utils/constants";
 import { getLlmProvider, type LlmConversationTurn, type LlmUnderstandResult } from "./gemini.provider";
 import { intentResolver } from "./intentResolver.service";

@@ -266,6 +266,18 @@ export function formatAssistantResponse(
       answer = `Bottom line: ${bottom} Current status: ${plural(today, "task")} due today, ${pending} pending, ${asNumber(data.completedTasks)} completed in the recent list.${projectLine} Attendance and leave are not in this system. Recommended action: ${overdue > 0 ? `clear ${name}'s overdue work first.` : `review ${name}'s today tasks and meetings.`}`;
       break;
     }
+    case "INVOICE_SUMMARY":
+      answer = `There ${asNumber(data.open) === 1 ? "is" : "are"} ${plural(asNumber(data.open), "open invoice")} (${asNumber(data.overdue)} overdue) with ${formatInrCompact(asNumber(data.outstanding))} outstanding.`;
+      break;
+    case "VENDOR_LIST":
+      answer = `I found ${plural(asNumber(data.count), "vendor")}.`;
+      break;
+    case "LAND_PARCEL_LIST":
+      answer = `I found ${plural(asNumber(data.count), "land parcel")}.`;
+      break;
+    case "MD_NOTES":
+      answer = `There ${asNumber(data.count) === 1 ? "is" : "are"} ${plural(asNumber(data.count), "MD note")}.`;
+      break;
     case "EMPLOYEE_OVERDUE_RANKING": {
       const employees = Array.isArray(data.employees) ? (data.employees as Array<Record<string, unknown>>) : [];
       if (employees.length === 0) {

@@ -19,8 +19,9 @@ export function toPublicDoc<T extends { toJSON?: () => unknown }>(
   doc: T | Record<string, unknown>,
   extra: string[] = [],
 ) {
-  if (doc && typeof (doc as T).toJSON === "function") {
-    const record = (doc as T).toJSON() as Record<string, unknown>;
+  const maybeJson = doc && typeof (doc as T).toJSON === "function" ? (doc as T).toJSON!.bind(doc) : null;
+  if (maybeJson) {
+    const record = maybeJson() as Record<string, unknown>;
     stringifyOfficeIds(record, extra);
     return record;
   }

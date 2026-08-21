@@ -204,7 +204,7 @@ export const INVOICE_SAFE_FIELDS =
   "invoiceId invoiceNumber customerId projectId amount paidAmount balance dueDate issueDate status description createdBy isDeleted deletedAt deletedBy createdAt updatedAt";
 
 export const INVOICE_PAYMENT_SAFE_FIELDS =
-  "paymentId invoiceId amount paidAt paymentMethod notes createdBy createdAt updatedAt";
+  "paymentId invoiceId amount paidAt paymentMethod financeTransactionId notes createdBy createdAt updatedAt";
 
 export const VENDOR_STATUSES = ["ACTIVE", "INACTIVE"] as const;
 export type VendorStatus = (typeof VENDOR_STATUSES)[number];

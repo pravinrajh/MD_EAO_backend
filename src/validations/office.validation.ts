@@ -6,7 +6,14 @@ import {
   PAYMENT_METHODS,
   VENDOR_STATUSES,
 } from "../utils/constants";
-import { moneyIntSchema, objectIdSchema, optionalIsoDateSchema, optionalObjectIdSchema, positiveMoneyIntSchema, rejectMongoOperators } from "./common.validation";
+import {
+  moneyIntSchema,
+  objectIdSchema,
+  optionalIsoDateSchema,
+  optionalObjectIdSchema,
+  positiveMoneyIntSchema,
+  rejectMongoOperators,
+} from "./common.validation";
 
 export const createInvoiceSchema = z
   .object({
@@ -34,6 +41,9 @@ export const recordInvoicePaymentSchema = z
     amount: positiveMoneyIntSchema,
     paymentMethod: z.enum(PAYMENT_METHODS).optional(),
     notes: z.string().trim().max(1000).optional(),
+    postToFinance: z.boolean().optional(),
+    accountId: optionalObjectIdSchema,
+    categoryId: optionalObjectIdSchema,
   })
   .strict()
   .superRefine(rejectMongoOperators);
@@ -49,7 +59,7 @@ export const listInvoicesQuerySchema = z
   })
   .strict();
 
-export const createVendorSchema = z
+const vendorBody = z
   .object({
     name: z.string().trim().min(1).max(160),
     phone: z.string().trim().max(20).optional(),
@@ -59,10 +69,10 @@ export const createVendorSchema = z
     status: z.enum(VENDOR_STATUSES).optional(),
     notes: z.string().trim().max(4000).optional(),
   })
-  .strict()
-  .superRefine(rejectMongoOperators);
+  .strict();
 
-export const updateVendorSchema = createVendorSchema.partial();
+export const createVendorSchema = vendorBody.superRefine(rejectMongoOperators);
+export const updateVendorSchema = vendorBody.partial().superRefine(rejectMongoOperators);
 
 export const listVendorsQuerySchema = z
   .object({
@@ -74,7 +84,7 @@ export const listVendorsQuerySchema = z
   })
   .strict();
 
-export const createLandParcelSchema = z
+const landParcelBody = z
   .object({
     name: z.string().trim().min(1).max(160),
     location: z.string().trim().max(160).optional(),
@@ -85,10 +95,10 @@ export const createLandParcelSchema = z
     projectId: optionalObjectIdSchema,
     notes: z.string().trim().max(4000).optional(),
   })
-  .strict()
-  .superRefine(rejectMongoOperators);
+  .strict();
 
-export const updateLandParcelSchema = createLandParcelSchema.partial();
+export const createLandParcelSchema = landParcelBody.superRefine(rejectMongoOperators);
+export const updateLandParcelSchema = landParcelBody.partial().superRefine(rejectMongoOperators);
 
 export const listLandParcelsQuerySchema = z
   .object({
@@ -100,16 +110,16 @@ export const listLandParcelsQuerySchema = z
   })
   .strict();
 
-export const createMdNoteSchema = z
+const mdNoteBody = z
   .object({
     body: z.string().trim().min(1).max(4000),
     relatedType: z.enum(MD_NOTE_RELATED_TYPES).optional(),
     relatedId: optionalObjectIdSchema,
   })
-  .strict()
-  .superRefine(rejectMongoOperators);
+  .strict();
 
-export const updateMdNoteSchema = createMdNoteSchema.partial();
+export const createMdNoteSchema = mdNoteBody.superRefine(rejectMongoOperators);
+export const updateMdNoteSchema = mdNoteBody.partial().superRefine(rejectMongoOperators);
 
 export const listMdNotesQuerySchema = z
   .object({

@@ -8,6 +8,7 @@ import { meetingService } from "../meeting.service";
 import { opportunityService } from "../opportunity.service";
 import { projectService } from "../project.service";
 import { reminderService } from "../reminder/reminder.service";
+import { taskService } from "../task.service";
 import { invoiceService } from "../invoice.service";
 import { vendorService } from "../vendor.service";
 import { landParcelService } from "../landParcel.service";
@@ -431,8 +432,23 @@ async function updateInvoice(actor: ActionActor, entities: ResolvedActionEntitie
 async function recordInvoicePayment(actor: ActionActor, entities: ResolvedActionEntities) {
   if (!entities.invoiceId) throw new Error("CLARIFICATION:Which invoice should I record a payment against?");
   if (!entities.amount) throw new Error("CLARIFICATION:What amount was paid?");
-  const updated = asRecord(await invoiceService.recordPayment(entities.invoiceId, { amount: entities.amount }, actor));
-  return { message: "Payment recorded on the invoice. Cash was not posted to finance accounts.", result: updated };
+  const postToFinance = Boolean(entities.postToFinance);
+  const updated = asRecord(
+    await invoiceService.recordPayment(
+      entities.invoiceId,
+      {
+        amount: entities.amount,
+        postToFinance,
+        accountId: entities.accountId,
+        categoryId: entities.categoryId,
+      },
+      actor,
+    ),
+  );
+  const message = postToFinance
+    ? "Payment recorded and cash was posted to finance."
+    : "Payment recorded on the invoice. Cash was not posted to finance accounts.";
+  return { message, result: updated };
 }
 
 async function createVendor(actor: ActionActor, entities: ResolvedActionEntities) {
@@ -540,10 +556,17 @@ export function confirmationFor(
       message: `Do you want me to delete ${entities.taskTitle ?? "this task"}? This cannot be undone from chat.`,
     };
   }
+  if (intent === "CANCEL_MEETING") {
     const title = entities.meetingTitle || "this meeting";
     return {
       required: true,
       message: `${title} is on the calendar. Do you want me to cancel it?`,
+    };
+  }
+  if (intent === "RECORD_INVOICE_PAYMENT" && entities.postToFinance) {
+    return {
+      required: true,
+      message: `Record ₹${entities.amount ?? "?"} on ${entities.invoiceNumber ?? "this invoice"} and post cash to finance?`,
     };
   }
   if (intent === "UPDATE_PROJECT" && (entities.status === "CANCELLED" || entities.status === "COMPLETED")) {

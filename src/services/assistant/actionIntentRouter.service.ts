@@ -8,6 +8,7 @@ import { leadService } from "../lead.service";
 import { meetingService } from "../meeting.service";
 import { opportunityService } from "../opportunity.service";
 import { projectService } from "../project.service";
+import { taskService } from "../task.service";
 import { invoiceService } from "../invoice.service";
 import { landParcelService } from "../landParcel.service";
 import { mdNoteService } from "../mdNote.service";
@@ -116,6 +117,19 @@ export function extractActionEntities(original: string, normalized: string): Ext
     if (Number.isInteger(value) && value >= 0) entities.budget = value;
   }
 
+  if (/\bpost (to )?(finance|bank|accounts?|cash)\b/.test(normalized)) {
+    entities.postToFinance = true;
+  }
+
+  const amountMatch =
+    original.match(/(?:₹|rs\.?|inr)\s*([\d,]+)/i) ||
+    original.match(/\b([\d,]+)\s*(?:rupees?|rs\.?|inr)\b/i) ||
+    original.match(/\bamount(?:\s+of)?\s+([\d,]+)\b/i);
+  if (amountMatch?.[1]) {
+    const value = Number(amountMatch[1].replace(/,/g, ""));
+    if (Number.isInteger(value) && value > 0) entities.amount = value;
+  }
+
   const stageMatch = original.match(
     /\b(new|qualification|proposal|negotiation|won|lost)\b/i,
   );
@@ -168,7 +182,12 @@ export function extractActionEntities(original: string, normalized: string): Ext
     if (lowerProject?.[1]) {
       const words = lowerProject[1]
         .split(/\s+/)
-        .filter((word) => !["the", "a", "new", "called", "named", "update", "create", "from"].includes(word));
+        .filter(
+          (word) =>
+            !["the", "a", "new", "called", "named", "update", "create", "from", "schedule", "book", "set", "make", "start"].includes(
+              word,
+            ),
+        );
       const name = usable(words.slice(-4).join(" "));
       if (name) entities.projectName = name;
     }
@@ -281,6 +300,8 @@ export function extractActionEntities(original: string, normalized: string): Ext
   if (note?.[1]) entities.noteBody = usable(note[1]);
   const amount = original.match(/\b(?:rs|inr|₹)?\s*(\d{3,12})\b/i);
   if (amount?.[1]) entities.amount = Number(amount[1]);
+  const businessTaskId = original.match(/\b(TASK-\d+)\b/i);
+  if (businessTaskId?.[1]) entities.taskId = businessTaskId[1].toUpperCase();
 
   return entities;
 }
@@ -297,6 +318,7 @@ export function applyActionConversationEntities(
     stored && typeof stored.result === "object" ? (stored.result as Record<string, unknown>) : stored;
   const taskId =
     (typeof nested?.id === "string" && nested.id) ||
+    (typeof nested?.taskId === "string" && nested.taskId) ||
     (typeof lastQuery?.taskId === "string" && lastQuery.taskId) ||
     undefined;
   const referringTask =
@@ -574,13 +596,25 @@ export async function resolveActionEntities(
   if ((extracted.taskTitle || extracted.taskId || options.needTask) && intent !== "CREATE_TASK") {
     lookups.push(
       (async () => {
-        if (extracted.taskId) {
+        if (extracted.taskId && /^[a-fA-F0-9]{24}$/.test(extracted.taskId)) {
           resolved.taskId = extracted.taskId;
           return;
         }
-        if (!extracted.taskTitle) return;
-        const result = await taskService.list({ search: extracted.taskTitle, limit: 5, page: 1 }, actor);
+        const search = extracted.taskId?.startsWith("TASK-")
+          ? extracted.taskId
+          : extracted.taskTitle;
+        if (!search) return;
+        const result = await taskService.list({ search, limit: 5, page: 1 }, actor);
         const items = result.items as Array<Record<string, unknown>>;
+        if (extracted.taskId?.startsWith("TASK-")) {
+          const exact = items.find((item) => String(item.taskId) === extracted.taskId);
+          if (exact) {
+            resolved.taskId = String(exact.id);
+            resolved.taskTitle = String(exact.title ?? "");
+            return;
+          }
+        }
+        if (!extracted.taskTitle) return;
         const named = await resolveNamedList("task", extracted.taskTitle, items, "tasks", ["title"]);
         if (named.notFound || named.clarification) Object.assign(resolved, named);
         else if (items[0]) {

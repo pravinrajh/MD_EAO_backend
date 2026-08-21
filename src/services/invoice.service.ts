@@ -1,17 +1,21 @@
 import { logger } from "../config/logger";
+import { accountRepository } from "../repositories/account.repository";
 import { customerRepository } from "../repositories/customer.repository";
+import { financeCategoryRepository } from "../repositories/financeCategory.repository";
 import { invoiceRepository } from "../repositories/invoice.repository";
 import { projectRepository } from "../repositories/project.repository";
 import type { InvoiceStatus, PaymentMethod } from "../utils/constants";
-import { BadRequestError, NotFoundError } from "../utils/errors";
+import { BadRequestError, ForbiddenError, NotFoundError } from "../utils/errors";
 import { assertObjectId } from "../utils/objectId";
 import { buildPaginationMeta, parsePagination } from "../utils/pagination";
 import { nextInvoiceId, nextInvoicePaymentId } from "../utils/sequence";
+import { financeTransactionService } from "./financeTransaction.service";
 import {
   type Actor,
   assertCanDeleteOffice,
   assertCanManageOffice,
   assertCanViewOffice,
+  isPrivileged,
   visibilityFilter,
 } from "./office.policy";
 
@@ -24,6 +28,16 @@ type CreateInvoiceInput = {
   description?: string;
 };
 
+type RecordPaymentInput = {
+  amount: number;
+  paidAt?: Date;
+  paymentMethod?: PaymentMethod | "";
+  notes?: string;
+  postToFinance?: boolean;
+  accountId?: string | null;
+  categoryId?: string | null;
+};
+
 function displayStatus(invoice: { status: string; dueDate: Date | null; balance: number }): InvoiceStatus {
   if (invoice.status === "CANCELLED" || invoice.status === "PAID" || invoice.status === "DRAFT") {
     return invoice.status as InvoiceStatus;
@@ -32,13 +46,52 @@ function displayStatus(invoice: { status: string; dueDate: Date | null; balance:
   return invoice.status as InvoiceStatus;
 }
 
-async function loadInvoice(id: string, actor: Actor) {
+async function loadInvoice(id: string, actor: Actor): Promise<Record<string, unknown>> {
   assertObjectId(id);
   const invoice = await invoiceRepository.findById(id);
   if (!invoice || invoice.isDeleted) throw new NotFoundError("Invoice not found");
-  const publicInvoice = invoiceRepository.toPublic(invoice);
+  const publicInvoice = invoiceRepository.toPublic(invoice) as Record<string, unknown>;
   assertCanViewOffice(actor, { createdBy: String(publicInvoice.createdBy) }, "this invoice");
-  return { ...publicInvoice, status: displayStatus(publicInvoice as { status: string; dueDate: Date | null; balance: number }) };
+  const result: Record<string, unknown> = { ...publicInvoice };
+  result.status = displayStatus({
+    status: String(publicInvoice.status),
+    dueDate: (publicInvoice.dueDate as Date | null) ?? null,
+    balance: Number(publicInvoice.balance ?? 0),
+  });
+  return result;
+}
+
+async function resolveIncomePosting(input: RecordPaymentInput) {
+  let accountId = input.accountId ?? null;
+  let categoryId = input.categoryId ?? null;
+  if (!accountId) {
+    const accounts = await accountRepository.list({
+      type: "BANK",
+      status: "ACTIVE",
+      skip: 0,
+      limit: 1,
+      sortBy: "createdAt",
+      sortOrder: "asc",
+    });
+    accountId = accounts.items[0] ? String(accounts.items[0].id) : null;
+  }
+  if (!categoryId) {
+    const categories = await financeCategoryRepository.list({
+      type: "INCOME",
+      status: "ACTIVE",
+      skip: 0,
+      limit: 1,
+      sortBy: "createdAt",
+      sortOrder: "asc",
+    });
+    categoryId = categories.items[0] ? String(categories.items[0].id) : null;
+  }
+  if (!accountId || !categoryId) {
+    throw new BadRequestError("Cannot post payment to finance without an active BANK account and INCOME category", [
+      { field: "postToFinance", message: "Provide accountId and categoryId or seed finance masters first" },
+    ]);
+  }
+  return { accountId, categoryId };
 }
 
 export const invoiceService = {
@@ -114,31 +167,63 @@ export const invoiceService = {
     return invoiceRepository.toPublic(updated);
   },
 
-  async recordPayment(
-    id: string,
-    input: { amount: number; paidAt?: Date; paymentMethod?: PaymentMethod | ""; notes?: string },
-    actor: Actor,
-  ) {
+  async recordPayment(id: string, input: RecordPaymentInput, actor: Actor) {
     assertCanManageOffice(actor, "invoices");
     const invoice = await loadInvoice(id, actor);
     if (invoice.status === "CANCELLED") throw new BadRequestError("Cancelled invoices cannot accept payment");
     if (Number(invoice.balance) <= 0) throw new BadRequestError("Invoice is already paid");
     if (input.amount > Number(invoice.balance)) throw new BadRequestError("Payment exceeds outstanding balance");
-    const paidAmount = Number(invoice.paidAmount) + input.amount;
-    const balance = Number(invoice.amount) - paidAmount;
-    const status: InvoiceStatus = balance === 0 ? "PAID" : "PARTIALLY_PAID";
+
+    const postToFinance = Boolean(input.postToFinance);
+    if (postToFinance && !isPrivileged(actor.role)) {
+      throw new ForbiddenError("Posting invoice payments to finance requires MD or ADMIN");
+    }
+
+    const paymentId = await nextInvoicePaymentId();
+    let financeTransactionId: string | null = null;
+
+    if (postToFinance) {
+      const posting = await resolveIncomePosting(input);
+      const txn = (await financeTransactionService.createIncome(
+        {
+          accountId: posting.accountId,
+          categoryId: posting.categoryId,
+          amount: input.amount,
+          description: `Invoice collection ${String(invoice.invoiceNumber)}`,
+          projectId: invoice.projectId ? String(invoice.projectId) : null,
+          customerId: String(invoice.customerId),
+          invoiceId: id,
+          transactionDate: input.paidAt ?? new Date(),
+          paymentMethod: (input.paymentMethod || "BANK_TRANSFER") as PaymentMethod,
+          notes: input.notes ?? "",
+          status: "COMPLETED",
+        },
+        actor,
+        `invoice-payment:${paymentId}`,
+      )) as Record<string, unknown>;
+      financeTransactionId = String(txn.id);
+    }
+
     await invoiceRepository.createPayment({
-      paymentId: await nextInvoicePaymentId(),
+      paymentId,
       invoiceId: id,
       amount: input.amount,
       paidAt: input.paidAt ?? new Date(),
       paymentMethod: input.paymentMethod ?? "",
+      financeTransactionId,
       notes: input.notes ?? "",
       createdBy: actor.id,
     });
+
+    const paidAmount = Number(invoice.paidAmount) + input.amount;
+    const balance = Number(invoice.amount) - paidAmount;
+    const status: InvoiceStatus = balance === 0 ? "PAID" : "PARTIALLY_PAID";
     const updated = await invoiceRepository.updateById(id, { paidAmount, balance, status });
     if (!updated) throw new NotFoundError("Invoice not found");
-    logger.info({ invoiceId: invoice.invoiceId, amount: input.amount }, "Invoice payment recorded");
+    logger.info(
+      { invoiceId: invoice.invoiceId, amount: input.amount, postToFinance, financeTransactionId },
+      "Invoice payment recorded",
+    );
     return this.getById(id, actor);
   },
 

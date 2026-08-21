@@ -3,6 +3,7 @@ import { componentResponses, componentSchemas, componentSecuritySchemes } from "
 import { corePaths } from "./paths.core";
 import { engagementPaths } from "./paths.engagement";
 import { financePaths } from "./paths.finance";
+import { officePaths } from "./paths.office";
 import { salesPaths } from "./paths.sales";
 import { assertValidOpenApi } from "./validate";
 
@@ -18,6 +19,7 @@ export const OPENAPI_TAGS = [
   { name: "Sales", description: "Sales activities, summaries, and follow-ups." },
   { name: "CRM", description: "Leads, customers, opportunities, and pipeline." },
   { name: "Finance", description: "Accounts, categories, transactions, budgets, and reports. Amounts are whole INR integers." },
+  { name: "Office", description: "Invoices/collections, vendors, land parcels, and MD notes." },
   { name: "Dashboard", description: "Executive-level business intelligence and KPI APIs." },
   { name: "Assistant Query", description: "Read-only natural-language business queries." },
   { name: "Assistant Action", description: "Controlled business actions executed through the AI Assistant." },
@@ -50,6 +52,7 @@ export function buildOpenApiDocument() {
       ...corePaths,
       ...salesPaths,
       ...financePaths,
+      ...officePaths,
       ...engagementPaths,
     },
     components: {

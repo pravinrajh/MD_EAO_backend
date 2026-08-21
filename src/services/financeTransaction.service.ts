@@ -46,6 +46,7 @@ type IncomeExpenseInput = {
   projectId?: string | null;
   customerId?: string | null;
   opportunityId?: string | null;
+  invoiceId?: string | null;
   transactionDate?: Date;
   paymentMethod?: PaymentMethod;
   externalReference?: string;
@@ -230,8 +231,15 @@ async function persistCompleted(input: {
   });
 }
 
-function referenceOf(input: { projectId?: string | null; customerId?: string | null; opportunityId?: string | null; type?: string }) {
+function referenceOf(input: {
+  projectId?: string | null;
+  customerId?: string | null;
+  opportunityId?: string | null;
+  invoiceId?: string | null;
+  type?: string;
+}) {
   if (input.type === "TRANSFER") return { referenceType: "TRANSFER", referenceId: "" };
+  if (input.invoiceId) return { referenceType: "INVOICE", referenceId: String(input.invoiceId) };
   if (input.opportunityId) return { referenceType: "OPPORTUNITY", referenceId: String(input.opportunityId) };
   if (input.customerId) return { referenceType: "CUSTOMER", referenceId: String(input.customerId) };
   if (input.projectId) return { referenceType: "PROJECT", referenceId: String(input.projectId) };

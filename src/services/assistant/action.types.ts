@@ -35,6 +35,7 @@ export type ExtractedActionEntities = {
   parcelName?: string;
   noteBody?: string;
   amount?: number;
+  postToFinance?: boolean;
 };
 
 export type ResolvedActionEntities = ExtractedActionEntities & {
@@ -50,11 +51,14 @@ export type ResolvedActionEntities = ExtractedActionEntities & {
   vendorId?: string;
   parcelId?: string;
   noteId?: string;
+  accountId?: string;
+  categoryId?: string;
   participantIds?: string[];
   dueDate?: Date;
   startTime?: Date;
   endTime?: Date;
   remindAt?: Date;
+  postToFinance?: boolean;
   clarification?: {
     field: string;
     question: string;

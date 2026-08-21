@@ -9,6 +9,10 @@ import { opportunityService } from "../opportunity.service";
 import { projectService } from "../project.service";
 import { salesService } from "../sales.service";
 import { taskService } from "../task.service";
+import { invoiceService } from "../invoice.service";
+import { vendorService } from "../vendor.service";
+import { landParcelService } from "../landParcel.service";
+import { mdNoteService } from "../mdNote.service";
 import type { AssistantActor, ExecutorPayload, ResolvedEntities } from "./types";
 import type { AssistantIntent } from "../../utils/constants";
 import { queryPlanExecutor } from "./queryPlanExecutor.service";
@@ -679,6 +683,86 @@ async function dynamicQuery(actor: AssistantActor, entities: ResolvedEntities) {
   );
 }
 
+async function invoiceSummary(actor: AssistantActor): Promise<ExecutorPayload> {
+  const result = await invoiceService.list({ ...LIST, sortBy: "createdAt", sortOrder: "desc" }, actor);
+  const items = result.items as Array<Record<string, unknown>>;
+  const open = items.filter((item) => !["PAID", "CANCELLED"].includes(String(item.status)));
+  const overdue = items.filter((item) => String(item.status) === "OVERDUE");
+  const outstanding = open.reduce((sum, item) => sum + Number(item.balance ?? 0), 0);
+  return {
+    intent: "INVOICE_SUMMARY",
+    data: {
+      total: result.meta.total,
+      open: open.length,
+      overdue: overdue.length,
+      outstanding,
+      showing: items.length,
+      invoices: items.slice(0, ASSISTANT_LIST_LIMIT).map((item) => ({
+        invoiceId: item.invoiceId,
+        invoiceNumber: item.invoiceNumber,
+        status: item.status,
+        amount: item.amount,
+        balance: item.balance,
+      })),
+    },
+    sources: [{ type: "INVOICE", count: result.meta.total }],
+  };
+}
+
+async function vendorList(actor: AssistantActor): Promise<ExecutorPayload> {
+  const result = await vendorService.list({ ...LIST }, actor);
+  return {
+    intent: "VENDOR_LIST",
+    data: {
+      count: result.meta.total,
+      showing: result.items.length,
+      vendors: result.items.slice(0, ASSISTANT_LIST_LIMIT).map((item) => ({
+        vendorId: item.vendorId,
+        name: item.name,
+        status: item.status,
+        location: item.location,
+      })),
+    },
+    sources: [{ type: "VENDOR", count: result.meta.total }],
+  };
+}
+
+async function landParcelList(actor: AssistantActor): Promise<ExecutorPayload> {
+  const result = await landParcelService.list({ ...LIST }, actor);
+  return {
+    intent: "LAND_PARCEL_LIST",
+    data: {
+      count: result.meta.total,
+      showing: result.items.length,
+      parcels: result.items.slice(0, ASSISTANT_LIST_LIMIT).map((item) => ({
+        parcelId: item.parcelId,
+        name: item.name,
+        status: item.status,
+        location: item.location,
+        askingPrice: item.askingPrice,
+      })),
+    },
+    sources: [{ type: "LAND_PARCEL", count: result.meta.total }],
+  };
+}
+
+async function mdNotes(actor: AssistantActor): Promise<ExecutorPayload> {
+  const result = await mdNoteService.list({ ...LIST }, actor);
+  return {
+    intent: "MD_NOTES",
+    data: {
+      count: result.meta.total,
+      showing: result.items.length,
+      notes: result.items.slice(0, ASSISTANT_LIST_LIMIT).map((item) => ({
+        noteId: item.noteId,
+        body: item.body,
+        relatedType: item.relatedType,
+      })),
+    },
+    sources: [{ type: "MD_NOTE", count: result.meta.total }],
+  };
+}
+
 const EXECUTORS: Record<
   Exclude<AssistantIntent, "UNSUPPORTED" | "SMALLTALK">,
   (actor: AssistantActor, entities: ResolvedEntities) => Promise<ExecutorPayload>
@@ -710,6 +794,10 @@ const EXECUTORS: Record<
   EMPLOYEE_WORKLOAD: employeeWorkload,
   DELAYED_PROJECT_WORKLOAD: delayedProjectWorkload,
   EMPLOYEE_DAILY_STATUS: employeeDailyStatus,
+  INVOICE_SUMMARY: invoiceSummary,
+  VENDOR_LIST: vendorList,
+  LAND_PARCEL_LIST: landParcelList,
+  MD_NOTES: mdNotes,
   DYNAMIC_QUERY: dynamicQuery,
 };
 

@@ -93,7 +93,7 @@ const RULES: Rule[] = [
     test: (n) =>
       (any(n, "schedule", "create a meeting", "create meeting", "book a meeting", "set up a meeting", "book 11", "make meeting") ||
         /\bmeet me\b/.test(n) ||
-        (/\bmeet\b/.test(n) && any(n, "tomorrow", "today", "am", "pm", "afternoon") && !re(n, /\bmeetings?\b/))) &&
+        (/\bmeet\b/.test(n) && any(n, "tomorrow", "today", "am", "pm", "afternoon", "at ") && !re(n, /\bmeetings?\b/))) &&
       !has(n, "cancel") &&
       !isReadQuestion(n),
   },

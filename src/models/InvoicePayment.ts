@@ -7,6 +7,7 @@ export type InvoicePaymentDocument = mongoose.Document & {
   amount: number;
   paidAt: Date;
   paymentMethod: PaymentMethod | "";
+  financeTransactionId: mongoose.Types.ObjectId | null;
   notes: string;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -30,6 +31,7 @@ const invoicePaymentSchema = new Schema<InvoicePaymentDocument>(
     },
     paidAt: { type: Date, required: true },
     paymentMethod: { type: String, enum: [...PAYMENT_METHODS, ""], default: "" },
+    financeTransactionId: { type: Schema.Types.ObjectId, ref: "FinanceTransaction", default: null },
     notes: { type: String, default: "", trim: true, maxlength: 1000 },
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
   },
