@@ -263,6 +263,7 @@ export function extractEntities(original: string, normalized: string): Extracted
   else if (/\blow\b/.test(normalized)) entities.priority = "LOW";
 
   if (/\boverdue\b/.test(normalized)) entities.status = "OVERDUE";
+  else if (/\bavailable\b/.test(normalized) && /\b(land|parcel)/.test(normalized)) entities.status = "AVAILABLE";
   else if (/\bpending\b/.test(normalized)) entities.status = "PENDING";
   else if (/\bcompleted\b/.test(normalized)) entities.status = "COMPLETED";
 

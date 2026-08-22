@@ -390,11 +390,21 @@ export const assistantService = {
     try {
       const executed = await withTimeout(
         (async () => {
+          const requireEmployee = detected.intent === "EMPLOYEE_DAILY_STATUS";
+          // Office list intents must not fail when Gemini invents a projectName (e.g. "MD note OMR").
+          if (
+            detected.intent === "MD_NOTES" ||
+            detected.intent === "VENDOR_LIST" ||
+            detected.intent === "LAND_PARCEL_LIST" ||
+            detected.intent === "INVOICE_SUMMARY"
+          ) {
+            delete extracted.projectName;
+            delete extracted.projectId;
+          }
           const requireProject = bql || plan
             ? Boolean(extracted.projectName)
             : PROJECT_INTENTS.has(detected.intent) &&
               (Boolean(extracted.projectName) || detected.intent !== "PROJECT_HEALTH");
-          const requireEmployee = detected.intent === "EMPLOYEE_DAILY_STATUS";
           const resolved = await entityResolver.resolveQuery(extracted, input.actor, { requireProject, requireEmployee });
 
           if (resolved.clarification) {

@@ -31,7 +31,7 @@ const envSchema = z.object({
   SWAGGER_ENABLED: z.enum(["true", "false"]).optional(),
   SWAGGER_SERVER_URL: z.string().trim().optional().default(""),
   GEMINI_API_KEY: z.string().optional().default(""),
-  GEMINI_MODEL: z.string().trim().min(1).default("gemini-2.5-flash"),
+  GEMINI_MODEL: z.string().trim().min(1).default("gemini-3.6-flash"),
   GEMINI_TIMEOUT_MS: z.coerce.number().int().positive().max(20_000).default(8_000),
 });
 

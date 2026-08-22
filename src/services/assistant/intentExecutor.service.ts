@@ -727,8 +727,12 @@ async function vendorList(actor: AssistantActor): Promise<ExecutorPayload> {
   };
 }
 
-async function landParcelList(actor: AssistantActor): Promise<ExecutorPayload> {
-  const result = await landParcelService.list({ ...LIST }, actor);
+async function landParcelList(actor: AssistantActor, entities: ResolvedEntities): Promise<ExecutorPayload> {
+  const statusFilter =
+    typeof entities.status === "string" && ["AVAILABLE", "NEGOTIATION", "LEGAL_VERIFICATION", "ACQUIRED", "DROPPED"].includes(entities.status)
+      ? (entities.status as "AVAILABLE" | "NEGOTIATION" | "LEGAL_VERIFICATION" | "ACQUIRED" | "DROPPED")
+      : undefined;
+  const result = await landParcelService.list({ ...LIST, status: statusFilter }, actor);
   return {
     intent: "LAND_PARCEL_LIST",
     data: {

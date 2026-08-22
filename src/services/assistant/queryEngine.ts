@@ -107,8 +107,8 @@ const RULES: IntentRule[] = [
   },
   {
     intent: "MD_NOTES",
-    score: 96,
-    test: (n) => re(n, /\bnotes?\b/) && isReadQuestion(n),
+    score: 98,
+    test: (n) => (re(n, /\bmd\s+notes?\b/) || (re(n, /\bnotes?\b/) && !re(n, /\binvoices?\b/))) && isReadQuestion(n),
   },
   {
     intent: "PENDING_TASKS",

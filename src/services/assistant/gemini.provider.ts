@@ -135,7 +135,8 @@ export class DisabledLlmProvider implements LlmProvider {
   }
 }
 
-const GEMINI_FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-3.6-flash"];
+// Prefer current public models. gemini-2.5-flash returns 404 for new API keys.
+const GEMINI_FALLBACK_MODELS = ["gemini-3.6-flash", "gemini-flash-latest"];
 
 function extractGeneratedText(body: {
   candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
@@ -336,8 +337,8 @@ export class GeminiProvider implements LlmProvider {
             },
           }),
         });
-        if (response.status === 404) {
-          logger.warn({ model, status: 404 }, "Gemini model unavailable, trying fallback");
+        if (response.status === 404 || response.status === 429) {
+          logger.warn({ model, status: response.status }, "Gemini model unavailable, trying fallback");
           continue;
         }
         if (!response.ok) {
