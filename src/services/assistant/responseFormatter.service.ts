@@ -275,9 +275,21 @@ export function formatAssistantResponse(
     case "LAND_PARCEL_LIST":
       answer = `I found ${plural(asNumber(data.count), "land parcel")}.`;
       break;
-    case "MD_NOTES":
-      answer = `There ${asNumber(data.count) === 1 ? "is" : "are"} ${plural(asNumber(data.count), "MD note")}.`;
+    case "MD_NOTES": {
+      const notes = Array.isArray(data.notes) ? (data.notes as Array<Record<string, unknown>>) : [];
+      if (notes.length === 0) {
+        answer = "There are no MD notes yet.";
+        break;
+      }
+      const preview = notes
+        .slice(0, 3)
+        .map((note) => asString(note.body).slice(0, 120))
+        .filter(Boolean);
+      answer = `There ${asNumber(data.count) === 1 ? "is" : "are"} ${plural(asNumber(data.count), "MD note")}.${
+        preview.length ? ` Latest: ${preview.join(" | ")}` : ""
+      }`;
       break;
+    }
     case "EMPLOYEE_OVERDUE_RANKING": {
       const employees = Array.isArray(data.employees) ? (data.employees as Array<Record<string, unknown>>) : [];
       if (employees.length === 0) {

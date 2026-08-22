@@ -19,6 +19,7 @@
     "create-admin": "tsx scripts/create-admin.ts",
     "seed": "tsx scripts/seed-demo.ts",
     "seed:archnova": "tsx database/seed/seed_demo_data.ts",
+    "seed:archnova:office": "tsx database/seed/seed_office_demo_data.ts",
     "seed:archnova:validate": "tsx database/seed/validate_demo_data.ts",
     "seed:performance": "tsx scripts/seed-performance.ts",
     "perf:explain": "tsx scripts/explain-queries.ts",

@@ -169,6 +169,7 @@ export function extractActionEntities(original: string, normalized: string): Ext
     (/\bcreate(?:\s+a)?\s+task\b/.test(normalized)
       ? null
       : original.match(/\b(?:called|named)\s+([A-Za-z0-9][A-Za-z0-9 &'()-]{1,60}?)\s*[.!]?\s*$/i)) ||
+    original.match(/\b(?:from|on|for)\s+([A-Z][a-zA-Z0-9]{1,40}(?:\s+[A-Z][a-zA-Z0-9]{1,40})*)\s+projects?\b/) ||
     original.match(/\b([A-Z][a-zA-Z0-9]{1,40}(?:\s+[A-Z][a-zA-Z0-9]{1,40})*)\s+projects?\b/);
   if (projectMatch?.[1]) {
     const words = projectMatch[1]
@@ -178,15 +179,38 @@ export function extractActionEntities(original: string, normalized: string): Ext
     if (name) entities.projectName = name;
   }
   if (!entities.projectName) {
-    const lowerProject = normalized.match(/\b([a-z0-9][a-z0-9 -]{1,40}?)\s+projects?\b/);
+    const lowerProject =
+      normalized.match(/\b(?:from|on|for)\s+([a-z0-9][a-z0-9 -]{1,40}?)\s+projects?\b/) ||
+      normalized.match(/\b([a-z0-9][a-z0-9 -]{1,40}?)\s+projects?\b/);
     if (lowerProject?.[1]) {
       const words = lowerProject[1]
         .split(/\s+/)
         .filter(
           (word) =>
-            !["the", "a", "new", "called", "named", "update", "create", "from", "schedule", "book", "set", "make", "start"].includes(
-              word,
-            ),
+            ![
+              "the",
+              "a",
+              "new",
+              "called",
+              "named",
+              "update",
+              "create",
+              "from",
+              "schedule",
+              "book",
+              "set",
+              "make",
+              "start",
+              "collect",
+              "payment",
+              "amount",
+              "follow",
+              "up",
+              "task",
+              "for",
+              "to",
+              "with",
+            ].includes(word),
         );
       const name = usable(words.slice(-4).join(" "));
       if (name) entities.projectName = name;
