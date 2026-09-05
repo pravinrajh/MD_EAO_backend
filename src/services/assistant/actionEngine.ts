@@ -14,8 +14,38 @@ const re = (text: string, pattern: RegExp) => pattern.test(text);
 const DANGEROUS =
   /\b(delete all|drop database|remove all|wipe|destroy)\b|\bdelete\b.+\b(projects?|customers?|users?|employees?|finance|history)\b|\b(transfer|pay|expense|income)\b.+\b(rupee|rs|₹|lakh|crore|money)\b|\bchange (account )?balance\b|\bcreate (an? )?(expense|income|transfer|finance transaction)\b/;
 
+// Verbs that open a directive ("add task to X give me a report"). A message
+// that leads with one of these is an instruction, not a question, even when
+// it trails into "...give me a report" / "...and show status" — trailing
+// reporting language must not override a clear opening command.
+const LEADING_ACTION_VERBS = new Set([
+  "add",
+  "assign",
+  "create",
+  "update",
+  "change",
+  "cancel",
+  "complete",
+  "mark",
+  "delete",
+  "remove",
+  "schedule",
+  "book",
+  "reschedule",
+  "move",
+  "record",
+  "collect",
+  "set",
+]);
+
+function hasLeadingActionVerb(normalized: string): boolean {
+  const firstWord = normalized.trim().split(/\s+/)[0] || "";
+  return LEADING_ACTION_VERBS.has(firstWord);
+}
+
 export function isReadQuestion(normalized: string): boolean {
   if (/\bgive it to\b|^give to\b/.test(normalized)) return false;
+  if (hasLeadingActionVerb(normalized)) return false;
   return /\b(what|which|who|whom|whose|where|when|why|how|show|list|tell|give|enna|entha|ethu|epdi|yean|working)\b/.test(
     normalized,
   );
@@ -153,6 +183,8 @@ const RULES: Rule[] = [
     test: (n) => {
       if (has(n, "meeting")) return false;
       if (has(n, "create") && re(n, /\btasks?\b/)) return true;
+      if (has(n, "add") && re(n, /\btasks?\b/) && has(n, "to")) return true;
+      if (has(n, "assign") && re(n, /\bnew\s+tasks?\b/)) return true;
       if (/\bneeds? to\b/.test(n) && !isReadQuestion(n)) return true;
       if (/\bfollow up\b/.test(n) && !has(n, "assign") && !isReadQuestion(n) && !has(n, "show")) return true;
       if (has(n, "assign") && /\b(follow-up|collection)\b/.test(n) && !has(n, "to") && !isReadQuestion(n)) return true;

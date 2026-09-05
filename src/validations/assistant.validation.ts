@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ASSISTANT_MESSAGE_MAX } from "../utils/constants";
+import { ASSISTANT_MESSAGE_MAX, ASSISTANT_MOM_TEXT_MAX } from "../utils/constants";
 import { rejectMongoOperators } from "./common.validation";
 
 export const queryAssistantSchema = z
@@ -9,6 +9,23 @@ export const queryAssistantSchema = z
       .trim()
       .min(1, "message is required")
       .max(ASSISTANT_MESSAGE_MAX, `message must be at most ${ASSISTANT_MESSAGE_MAX} characters`),
+    conversationId: z
+      .string({ invalid_type_error: "conversationId must be a string" })
+      .trim()
+      .min(1, "conversationId cannot be empty")
+      .max(100, "conversationId must be at most 100 characters")
+      .optional(),
+  })
+  .strict()
+  .superRefine(rejectMongoOperators);
+
+export const importMeetingMinutesSchema = z
+  .object({
+    text: z
+      .string({ required_error: "text is required", invalid_type_error: "text must be a string" })
+      .trim()
+      .min(10, "text must be at least 10 characters")
+      .max(ASSISTANT_MOM_TEXT_MAX, `text must be at most ${ASSISTANT_MOM_TEXT_MAX} characters`),
     conversationId: z
       .string({ invalid_type_error: "conversationId must be a string" })
       .trim()

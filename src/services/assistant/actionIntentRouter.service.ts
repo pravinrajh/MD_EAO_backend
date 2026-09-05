@@ -43,6 +43,18 @@ const EMPLOYEE_STOP = new Set([
   "reminder",
   "new",
   "all",
+  "to",
+  "one",
+  "someone",
+  "anyone",
+  "everyone",
+  "anybody",
+  "somebody",
+  "person",
+  "employee",
+  "employees",
+  "staff",
+  "team",
 ]);
 const COMPANY_STOP = new Set(["AM", "PM", "HR"]);
 const DATE_STOP = new Set([
@@ -86,12 +98,32 @@ function stripNoise(text: string): string {
     .trim();
 }
 
+// Fixes common typos of the directive verbs the entity regexes below key off
+// of (e.g. "assing new task to X" for "assign new task to X"), so a typo in
+// the verb doesn't stop the employee/title extraction that follows it.
+function correctActionTypos(text: string): string {
+  return text.replace(/\bassing\b/gi, "assign").replace(/\basign\b/gi, "assign");
+}
+
+// A second captured word is only kept when it looks like part of a name.
+// Drops connector/generic-noun words ("to", "employee", "give", ...) that a
+// two-word capture window would otherwise pull in from the rest of the
+// sentence, e.g. "for Raj to call ABC" should yield "Raj", not "Raj to".
+function trimEmployeeCapture(raw: string): string {
+  const words = raw.trim().split(/\s+/);
+  if (words.length > 1 && EMPLOYEE_STOP.has(words[1].toLowerCase())) {
+    return words[0];
+  }
+  return raw.trim();
+}
+
 export function detectActionIntent(normalized: string): DetectedActionIntent {
   return defaultActionEngine.detectIntent(normalized);
 }
 
-export function extractActionEntities(original: string, normalized: string): ExtractedActionEntities {
+export function extractActionEntities(rawOriginal: string, normalized: string): ExtractedActionEntities {
   const entities: ExtractedActionEntities = {};
+  const original = correctActionTypos(rawOriginal);
 
   const dateMatch = original.match(DATE_PHRASE);
   if (dateMatch) entities.datePhrase = dateMatch[1].toLowerCase();
@@ -142,6 +174,35 @@ export function extractActionEntities(original: string, normalized: string): Ext
   );
   if (statusMatch) entities.status = statusMatch[1].toUpperCase().replace(/\s+/g, "_");
 
+  // Case-insensitive: users type in lowercase ("assign new task to sathish
+  // raman") far more often than with proper-noun capitalization. Each branch
+  // allows an optional second word so two-word names ("Sathish Raman") are
+  // captured whole; trimEmployeeCapture() below strips that second word back
+  // off when it's a connector/generic-noun rather than part of a name.
+  // Users type in lowercase far more often than with proper-noun
+  // capitalization ("assign new task to sathish raman"), but a bare
+  // lowercase-tolerant "to X" / "for X" can't be told apart from ordinary
+  // verb phrases elsewhere in the sentence ("priority to high", "lead to
+  // contacted", "needs to collect ..."). Capitalization was doing that
+  // filtering job implicitly. Rather than drop it everywhere (which lets
+  // those false positives through), only the specific, unambiguous
+  // "assign/add [a/an/new] task(s) to/for X" shape gets lowercase and
+  // two-word ("Sathish Raman") tolerance; every other pattern below keeps
+  // the original case-sensitive, single-word behavior unchanged.
+  const NAME_TOKEN = "[A-Za-z][A-Za-z.'-]{1,40}";
+  const TASK_DIRECTIVE_NAME = new RegExp(
+    `\\b(?:assign|add)(?:\\s+(?:a|an|new))?\\s+tasks?\\s+(?:to|for)\\s+(${NAME_TOKEN}(?:\\s+${NAME_TOKEN})?)\\b`,
+    "i",
+  );
+  const directiveRaw = original.match(TASK_DIRECTIVE_NAME)?.[1];
+  if (directiveRaw) {
+    const candidate = trimEmployeeCapture(directiveRaw);
+    const words = candidate.toLowerCase().split(/\s+/);
+    if (!words.some((word) => EMPLOYEE_STOP.has(word) || DATE_STOP.has(word))) {
+      entities.employeeName = candidate;
+    }
+  }
+
   const employeeMatch =
     original.match(/\b(?:with|assign(?:ed)?(?:\s+it)?(?:\s+to)?)\s+([A-Z][a-zA-Z.'-]{1,40})\b/) ||
     original.match(/\bto\s+([A-Z][a-z]{1,40})\b/) ||
@@ -150,6 +211,7 @@ export function extractActionEntities(original: string, normalized: string): Ext
       : null) ||
     original.match(/\b([A-Za-z][A-Za-z.'-]{1,40}?)(?:'s|’s)\b/);
   if (
+    !entities.employeeName &&
     employeeMatch?.[1] &&
     !EMPLOYEE_STOP.has(employeeMatch[1].toLowerCase()) &&
     !DATE_STOP.has(employeeMatch[1].toLowerCase())
@@ -274,6 +336,18 @@ export function extractActionEntities(original: string, normalized: string): Ext
       .replace(/\bfor\s+[A-Za-z].*$/i, "")
       .trim();
     if (title) entities.title = title.charAt(0).toUpperCase() + title.slice(1);
+  }
+  if (!entities.title) {
+    // "add task to X <what>" / "assign (new) task to X <what>" — phrasing
+    // that creates a task without the word "create" (see the createTask
+    // block above, which only fires on "create ... task").
+    const directiveTask = original.match(
+      /\b(?:add|assign)(?:\s+(?:a|an|new))?\s+tasks?\s+(?:to|for)\s+[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*)?\s+(.+)/i,
+    );
+    if (directiveTask?.[1]) {
+      const title = usable(stripNoise(directiveTask[1]));
+      if (title) entities.title = title.charAt(0).toUpperCase() + title.slice(1);
+    }
   }
   if (!entities.title) {
     const needs = original.match(/\bneeds? to\s+(.+)/i);

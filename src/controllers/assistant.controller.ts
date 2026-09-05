@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { assistantService } from "../services/assistant/assistant.service";
 import { chatService } from "../services/assistant/chat.service";
+import { momImportService } from "../services/assistant/momImport.service";
 import { sendSuccess } from "../utils/apiResponse";
 import { asyncHandler } from "../utils/asyncHandler";
 import { ASSISTANT_IDEMPOTENCY_MAX } from "../utils/constants";
@@ -39,6 +40,14 @@ export const assistantController = {
       idempotencyKey: idempotencyKey(req),
     });
     return sendSuccess({ res, message: "Chat processed successfully", data });
+  }),
+
+  importMeetingMinutes: asyncHandler(async (req: Request, res: Response) => {
+    const data = await momImportService.importMinutes({
+      text: String(req.body.text),
+      actor: actor(req),
+    });
+    return sendSuccess({ res, message: "Meeting minutes processed successfully", data });
   }),
 
   getAssistantHistory: asyncHandler(async (req: Request, res: Response) => {

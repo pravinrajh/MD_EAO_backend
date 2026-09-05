@@ -27,6 +27,9 @@ const SPELLING: Array<[RegExp, string]> = [
   [/\bcollecton\b/g, "collection"],
   [/\bsathis\b/gi, "sathish"],
   [/\bsathishh\b/gi, "sathish"],
+  [/\bassing\b/gi, "assign"],
+  [/\basign\b/gi, "assign"],
+  [/\bcreat\b/gi, "create"],
 ];
 
 const NAME_STOPWORDS = new Set([

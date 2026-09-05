@@ -42,9 +42,26 @@ export function createApp() {
 
   app.disable("x-powered-by");
   app.use(helmet());
+  // Flutter web (`flutter run -d chrome`) binds a random localhost port on every
+  // run, so a fixed allow-list rejects the dev frontend. In development any
+  // localhost/127.0.0.1 origin is accepted; production stays on CORS_ORIGIN.
+  const allowedOrigins = env.CORS_ORIGIN.split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+  const isLoopbackOrigin = (origin: string) =>
+    /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+
   app.use(
     cors({
-      origin: env.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
+      origin: (origin, callback) => {
+        // Same-origin, curl and native apps (Flutter macOS/iOS/Android) send no Origin.
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        if (env.NODE_ENV !== "production" && isLoopbackOrigin(origin)) {
+          return callback(null, true);
+        }
+        return callback(null, false);
+      },
       credentials: true,
     }),
   );
