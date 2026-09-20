@@ -1,6 +1,7 @@
 import { env, isTest } from "../../config/env";
 import { logger } from "../../config/logger";
 import { ASSISTANT_ACTION_INTENTS, ASSISTANT_INTENTS } from "../../utils/constants";
+import { getAiProviderRouter, getLlmProviderWithFallback } from "./ai-provider-router";
 
 export type LlmConversationTurn = {
   role: "user" | "assistant";
@@ -365,9 +366,39 @@ const disabledProvider = new DisabledLlmProvider();
 const liveProvider = new GeminiProvider();
 let overrideProvider: LlmProvider | null = null;
 
+/**
+ * Get LLM Provider with Multi-Provider Fallback Support
+ * 
+ * When AI_FALLBACK_ENABLED=true (default), this returns a router-based provider
+ * that automatically tries multiple AI providers in priority order.
+ * 
+ * Priority: .env AI_PROVIDERS_PRIORITY (default: gemini,grok,openai,z_ai,claude)
+ * 
+ * To disable fallback and use only Gemini:
+ *   Set AI_FALLBACK_ENABLED=false in .env
+ */
 export function getLlmProvider(): LlmProvider {
+  // If override provider set (for testing), use it
   if (overrideProvider) return overrideProvider;
+  
+  // If in test mode without Gemini key, return disabled
   if (isTest && !env.GEMINI_API_KEY) return disabledProvider;
+  
+  // Check if multi-provider fallback is enabled (default: true)
+  if (env.AI_FALLBACK_ENABLED !== "false") {
+    const router = getAiProviderRouter();
+    
+    // If router has any providers configured, use it with fallback
+    if (router.hasAvailableProvider()) {
+      logger.debug(
+        { status: router.getStatus() },
+        "Using AI Provider Router with multi-provider fallback"
+      );
+      return getLlmProviderWithFallback();
+    }
+  }
+  
+  // Fallback to original behavior: use Gemini only
   if (env.GEMINI_API_KEY) return liveProvider;
   return disabledProvider;
 }

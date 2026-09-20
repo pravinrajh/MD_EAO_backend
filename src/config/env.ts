@@ -30,9 +30,37 @@ const envSchema = z.object({
   WHATSAPP_LINK_CODE_TTL_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
   SWAGGER_ENABLED: z.enum(["true", "false"]).optional(),
   SWAGGER_SERVER_URL: z.string().trim().optional().default(""),
+
+  // ===== Gemini (Google) =====
   GEMINI_API_KEY: z.string().optional().default(""),
   GEMINI_MODEL: z.string().trim().min(1).default("gemini-3.6-flash"),
   GEMINI_TIMEOUT_MS: z.coerce.number().int().positive().max(20_000).default(8_000),
+
+  // ===== Grok (xAI) =====
+  GROK_API_KEY: z.string().optional().default(""),
+  GROK_MODEL: z.string().trim().min(1).default("grok-3"),
+  GROK_TIMEOUT_MS: z.coerce.number().int().positive().max(20_000).default(10_000),
+
+  // ===== OpenAI =====
+  OPENAI_API_KEY: z.string().optional().default(""),
+  OPENAI_MODEL: z.string().trim().min(1).default("gpt-4o-mini"),
+  OPENAI_TIMEOUT_MS: z.coerce.number().int().positive().max(20_000).default(10_000),
+
+  // ===== Z AI =====
+  Z_AI_API_KEY: z.string().optional().default(""),
+  Z_AI_MODEL: z.string().trim().min(1).default("default"),
+  Z_AI_TIMEOUT_MS: z.coerce.number().int().positive().max(20_000).default(10_000),
+
+  // ===== Claude (Anthropic) =====
+  CLAUDE_API_KEY: z.string().optional().default(""),
+  CLAUDE_MODEL: z.string().trim().min(1).default("claude-sonnet-4-20250514"),
+  CLAUDE_TIMEOUT_MS: z.coerce.number().int().positive().max(20_000).default(10_000),
+
+  // ===== Multi-AI Fallback Settings =====
+  AI_PROVIDERS_PRIORITY: z.string().trim().default("gemini,grok,openai,z_ai,claude"),
+  AI_RESPONSE_LANGUAGE: z.enum(["en", "ta", "auto"]).default("en"),
+  AI_FALLBACK_ENABLED: z.enum(["true", "false"]).default("true"),
+  AI_MAX_RETRIES: z.coerce.number().int().min(1).max(10).default(3),
 });
 
 const parsed = envSchema.safeParse(process.env);
